@@ -1,4 +1,6 @@
-Here’s the updated 🧩 Modular Implementation Plan – AI Attendance System (with MediaPipe):
+🧩 Modular Implementation Plan – EyeD (AI Attendance System)
+
+(with MediaPipe for liveness detection)
 
 Phase 1: Core Setup & Face Registration
 
@@ -6,7 +8,7 @@ Day 1: Project Setup
 
 Create GitHub repo → add README.md with project idea + plan.
 
-Setup Python virtual environment.
+Setup Python virtual environment (venv/).
 
 Install dependencies:
 
@@ -15,28 +17,36 @@ pip install opencv-python mediapipe deepface numpy pandas streamlit plotly
 
 Create folder structure:
 
-ai_attendance/
-├── data/          # Face embeddings, attendance CSV
-├── modules/       # Core Python modules
-├── dashboard/     # Streamlit app
-├── demos/         # Demo videos/screenshots
-├── main.py        # Entry point
-└── README.md
+EyeD/
+├── venv/                  # Virtual environment
+├── src/                   # Source code
+│   ├── main.py            # Entry point
+│   ├── dashboard/         # Streamlit app
+│   ├── modules/           # Core AI modules
+│   ├── utils/             # Helper functions (db, logger, config)
+│   └── tests/             # Unit tests
+├── data/                  # User data + attendance logs
+│   ├── faces/             # Registered selfies
+│   └── attendance.csv
+├── demos/                 # Demo videos/screenshots
+├── docs/                  # Documentation
+├── requirements.txt       # Dependencies
+└── README.md              # Project overview
 
 
 Day 2: Face Registration (Selfie Capture)
 
-Script to take webcam snapshot OR allow image upload.
+Script (src/modules/registration.py) → take webcam snapshot OR allow image upload.
 
-Store registration selfies in /data/faces/.
+Save selfies → data/faces/.
 
-Extract embeddings (DeepFace MobileNet) → store in faces.json / faces.csv.
+Extract embeddings (DeepFace MobileNet) → store in data/faces.json or faces.csv.
 
-Test by registering 2–3 users.
+Test with 2–3 users.
 
 Day 3: Embedding Database
 
-Create module modules/face_db.py:
+Create src/modules/face_db.py:
 
 register_user(name, image) → stores embedding + metadata.
 
@@ -48,54 +58,54 @@ Phase 2: Recognition + Liveness
 
 Day 4: Face Recognition (Basic)
 
-Implement recognize_user(frame) using DeepFace.
+Implement recognize_user(frame) in src/modules/recognition.py using DeepFace.
 
-Match with stored embeddings → return name + confidence score.
+Match with stored embeddings → return name + confidence.
 
-Print results in terminal for testing.
+Print results for testing.
 
 Day 5: Live Video Recognition
 
-Capture webcam feed with OpenCV.
+Capture webcam feed (main.py with OpenCV).
 
-Detect & recognize faces frame by frame.
+Detect + recognize faces per frame.
 
-Display recognition result live on screen (bounding boxes + names).
+Display bounding boxes + names in real-time.
 
-Day 6: Blink Detection (with MediaPipe)
+Day 6: Blink Detection (MediaPipe)
 
-Use MediaPipe Face Mesh → 468 facial landmarks.
+Use MediaPipe FaceMesh (468 landmarks).
 
-Identify eye landmarks.
+Extract eye landmarks.
 
-Compute Eye Aspect Ratio (EAR) or directly track eye openness from landmarks.
+Compute EAR (Eye Aspect Ratio) or track openness directly.
 
-Detect blink events.
-
-Print "Blink detected" when eyes close → open.
+Detect blink events → print "Blink detected".
 
 Day 7: Liveness Integration
 
-Combine recognition + blink detection.
+Integrate recognition (recognition.py) + blink detection (liveness.py).
 
-User is marked “Verified Live” only if:
+A user is marked Verified Live only if:
 
-Face recognized.
+✅ Face recognized
 
-Blink detected within session.
+✅ Blink detected within session
 
 Phase 3: Attendance Logging
 
 Day 8: Attendance Logging (CSV)
 
-Create attendance.csv with columns:
+Create data/attendance.csv with columns:
+
 Name, ID, Date, Time, Status, Confidence, Liveness Verified
 
-Logging function → writes entry only once per day per user.
+
+Implement log_attendance() in src/utils/database.py → 1 entry per day per user.
 
 Day 9: Confidence & Transparency
 
-Include DeepFace confidence score in CSV.
+Add DeepFace confidence score to log.
 
 Print live confirmation (e.g., ✅ Alice logged at 10:32 AM).
 
@@ -103,7 +113,7 @@ Phase 4: Dashboard Development
 
 Day 10: Basic Dashboard Skeleton
 
-Build Streamlit app with sidebar menu:
+Streamlit app in src/dashboard/app.py with sidebar menu:
 
 Dashboard
 
@@ -115,66 +125,68 @@ Register User
 
 Day 11: Attendance Table View
 
-Load attendance.csv in dashboard.
+Load data/attendance.csv in dashboard.
 
 Add filters (date, user, status).
 
-Show emoji markers (✅, ❌).
+Show emoji markers (✅ present, ❌ absent).
 
 Day 12: Analytics View
 
-Use Plotly to show:
+Use Plotly to visualize:
 
-Attendance % chart.
+Attendance % chart
 
-Late arrivals stats.
+Late arrivals
 
-Weekly/monthly summary.
+Weekly/monthly summary
 
 Day 13: User Registration Page
 
 Streamlit form → upload image + name.
 
-Save selfie + generate embedding.
+Save selfie in data/faces/ + generate embedding.
 
 Update faces.json live.
 
 Day 14: Gamified Features
 
-Add emoji badges (🏆 100% attendance, 🌙 Late comer).
+Add emoji badges:
 
-Add timeline chart → when users arrived each day.
+🏆 100% attendance
+
+🌙 Late comer
+
+Add timeline chart → arrival times per user.
 
 Phase 5: Deployment & Demo
 
 Day 15: Local Demo Video
 
-Run full system (recognition + liveness + logging).
+Run full system → recognition + liveness + logging.
 
-Record short demo video.
-
-Save in /demos/demo.mp4.
+Record screen demo → save in demos/demo.mp4.
 
 Day 16: Streamlit Cloud Deployment
 
-Deploy dashboard (analytics + logs + registration).
+Deploy dashboard (src/dashboard/app.py).
 
-Since webcam won’t work in cloud → allow video upload for demo processing.
+Cloud limitation → allow video upload for demo processing.
 
-Link GitHub repo + Streamlit Cloud in README.md.
+Link repo + Streamlit Cloud in README.md.
 
-✅ Final Deliverables after 16 days:
+✅ Final Deliverables (after 16 days)
 
-Full working local attendance system (with MediaPipe-based liveness check).
+EyeD Local System: Real-time recognition + MediaPipe liveness check.
 
-Streamlit dashboard hosted on cloud.
+Dashboard on Streamlit Cloud: Logs, analytics, registration.
 
-Demo video in repo → recruiter-friendly project.
+Demo Video: Stored in demos/ for recruiters.
 
-⚡ Key Change vs Old Plan:
+⚡ Key Change vs Old Plan
 
-Dlib → MediaPipe for landmarks & liveness (lighter, faster, modern).
+Dlib → MediaPipe for blink/liveness.
 
-No CMake hassles.
+No CMake hassles, runs smoothly on CPU laptops.
 
-System runs smoother on CPU-only laptops.
+Folder structure updated for EyeD instead of ai_attendance.
