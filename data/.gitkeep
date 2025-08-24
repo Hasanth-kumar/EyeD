@@ -1,0 +1,2 @@
+# This file ensures the data directory is tracked in git
+# The actual data files (images, CSV) are ignored via .gitignore
