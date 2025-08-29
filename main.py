@@ -179,7 +179,7 @@ def save_frame(frame, results):
 def main():
     """Main entry point for EyeD application"""
     parser = argparse.ArgumentParser(description="EyeD AI Attendance System")
-    parser.add_argument("--mode", choices=["webcam", "dashboard", "register", "test_db", "recognition"], 
+    parser.add_argument("--mode", choices=["webcam", "dashboard", "register", "test_db", "recognition", "liveness"], 
                        default="webcam", help="Application mode")
     parser.add_argument("--camera", type=int, default=0, help="Camera device ID")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
@@ -467,6 +467,309 @@ def main():
             print("Make sure the FaceRecognition module is properly implemented")
         except Exception as e:
             print(f"❌ Face recognition test error: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    elif args.mode == "liveness":
+        print("👁️ Testing Liveness Detection Module (Day 6)...")
+        try:
+            from modules.liveness import LivenessDetection
+            import numpy as np
+            
+            print("\n🧩 Liveness Detection Test Mode")
+            print("=" * 40)
+            print("1. Test MediaPipe initialization")
+            print("2. Test face quality assessment")
+            print("3. Test MediaPipe face detection")
+            print("4. Test eye landmark extraction")
+            print("5. Test EAR calculation")
+            print("6. Test blink detection")
+            print("7. Test complete liveness verification")
+            print("8. Test with webcam (real-time)")
+            print("9. Run full test suite")
+            print("10. Test enhanced features")
+            print("11. Back to main menu")
+            print()
+            
+            while True:
+                choice = input("Enter your choice (1-11): ").strip()
+                
+                if choice == "1":
+                    print("\n📋 Testing MediaPipe Initialization...")
+                    liveness = LivenessDetection()
+                    if liveness.mp_face_mesh is not None:
+                        print("✅ MediaPipe FaceMesh initialized successfully")
+                        print("✅ MediaPipe Drawing utilities available")
+                        print("✅ MediaPipe Drawing styles available")
+                    else:
+                        print("❌ MediaPipe initialization failed")
+                
+                elif choice == "2":
+                    print("\n📋 Testing Face Quality Assessment...")
+                    liveness = LivenessDetection()
+                    
+                    # Create test images with different qualities
+                    test_image_good = np.ones((480, 480, 3), dtype=np.uint8) * 128
+                    test_image_small = np.ones((240, 240, 3), dtype=np.uint8) * 128
+                    test_image_dark = np.ones((480, 480, 3), dtype=np.uint8) * 10
+                    test_image_bright = np.ones((480, 480, 3), dtype=np.uint8) * 240
+                    
+                    print("Testing different image qualities...")
+                    
+                    # Test good quality image
+                    quality_good = liveness.assess_face_quality(test_image_good)
+                    print(f"✅ Good quality image: Score {quality_good['quality_score']}/100")
+                    print(f"   Resolution: {quality_good['resolution']} - {'✅' if quality_good['resolution_ok'] else '❌'}")
+                    print(f"   Brightness: {quality_good['brightness']:.1f} - {'✅' if quality_good['brightness_ok'] else '❌'}")
+                    print(f"   Contrast: {quality_good['contrast']:.1f} - {'✅' if quality_good['contrast_ok'] else '❌'}")
+                    print(f"   Sharpness: {quality_good['sharpness']:.1f} - {'✅' if quality_good['sharpness_ok'] else '❌'}")
+                    
+                    # Test small image
+                    quality_small = liveness.assess_face_quality(test_image_small)
+                    print(f"⚠️ Small image: Score {quality_small['quality_score']}/100")
+                    
+                    # Test dark image
+                    quality_dark = liveness.assess_face_quality(test_image_dark)
+                    print(f"⚠️ Dark image: Score {quality_dark['quality_score']}/100")
+                    
+                    # Test bright image
+                    quality_bright = liveness.assess_face_quality(test_image_bright)
+                    print(f"⚠️ Bright image: Score {quality_bright['quality_score']}/100")
+                
+                elif choice == "3":
+                    print("\n📋 Testing MediaPipe Face Detection...")
+                    liveness = LivenessDetection()
+                    
+                    # Create test images
+                    test_image = np.ones((480, 480, 3), dtype=np.uint8) * 128
+                    test_image_large = np.ones((640, 480, 3), dtype=np.uint8) * 128
+                    
+                    print("Testing face detection with different image sizes...")
+                    
+                    faces_480 = liveness.detect_faces_mediapipe(test_image)
+                    print(f"✅ 480x480 image: {len(faces_480)} faces detected")
+                    
+                    faces_640 = liveness.detect_faces_mediapipe(test_image_large)
+                    print(f"✅ 640x480 image: {len(faces_640)} faces detected")
+                    
+                    print("Note: Synthetic images may not contain detectable faces")
+                
+                elif choice == "4":
+                    print("\n📋 Testing Eye Landmark Extraction...")
+                    liveness = LivenessDetection()
+                    
+                    print("Eye landmark indices defined:")
+                    print(f"✅ Left eye: {len(liveness.LEFT_EYE_INDICES)} landmarks")
+                    print(f"✅ Right eye: {len(liveness.RIGHT_EYE_INDICES)} landmarks")
+                    
+                    # Check landmark index ranges
+                    left_valid = all(0 <= idx < 468 for idx in liveness.LEFT_EYE_INDICES)
+                    right_valid = all(0 <= idx < 468 for idx in liveness.RIGHT_EYE_INDICES)
+                    
+                    print(f"✅ Left eye indices valid: {left_valid}")
+                    print(f"✅ Right eye indices valid: {right_valid}")
+                
+                elif choice == "5":
+                    print("\n📋 Testing EAR Calculation...")
+                    liveness = LivenessDetection()
+                    
+                    # Create mock eye landmarks for testing
+                    mock_eye_landmarks = [
+                        [0.0, 0.0, 0.0],  # p1
+                        [0.0, 1.0, 0.0],  # p2
+                        [0.0, 2.0, 0.0],  # p3
+                        [1.0, 0.0, 0.0],  # p4
+                        [0.0, 3.0, 0.0],  # p5
+                        [0.0, 4.0, 0.0]   # p6
+                    ]
+                    
+                    ear = liveness.calculate_ear(mock_eye_landmarks)
+                    print(f"✅ EAR calculated: {ear:.4f}")
+                    
+                    # Test with insufficient landmarks
+                    ear_insufficient = liveness.calculate_ear(mock_eye_landmarks[:3])
+                    print(f"✅ Insufficient landmarks handled: {ear_insufficient}")
+                
+                elif choice == "6":
+                    print("\n📋 Testing Blink Detection...")
+                    liveness = LivenessDetection()
+                    
+                    # Reset blink counter for clean test
+                    liveness.reset_blink_counter()
+                    
+                    print("Simulating blink detection...")
+                    
+                    # Simulate eyes closed (low EAR)
+                    blink1 = liveness.detect_blink(0.1, 0.1)  # First call
+                    print(f"First call (eyes closed): {'✅ Blink detected' if blink1 else '❌ No blink'}")
+                    
+                    blink2 = liveness.detect_blink(0.1, 0.1)  # Second call (consecutive)
+                    print(f"Second call (consecutive): {'✅ Blink detected' if blink2 else '❌ No blink'}")
+                    
+                    # Simulate eyes open (high EAR)
+                    blink3 = liveness.detect_blink(0.3, 0.3)  # Eyes open
+                    print(f"Third call (eyes open): {'✅ Blink detected' if blink3 else '❌ No blink'}")
+                    
+                    print(f"✅ Total blinks detected: {liveness.get_blink_count()}")
+                
+                elif choice == "7":
+                    print("\n📋 Testing Complete Liveness Verification...")
+                    liveness = LivenessDetection()
+                    
+                    # Create test images
+                    test_image_good = np.ones((480, 480, 3), dtype=np.uint8) * 128
+                    test_image_small = np.ones((240, 240, 3), dtype=np.uint8) * 128
+                    
+                    print("Testing liveness verification...")
+                    
+                    # Test good quality image
+                    is_live_good, confidence_good, quality_good = liveness.verify_liveness(test_image_good)
+                    print(f"✅ Good quality image:")
+                    print(f"   Liveness: {'✅ Live' if is_live_good else '❌ Not live'}")
+                    print(f"   Confidence: {confidence_good:.3f}")
+                    print(f"   Quality score: {quality_good['quality_score']}/100")
+                    
+                    # Test small image
+                    is_live_small, confidence_small, quality_small = liveness.verify_liveness(test_image_small)
+                    print(f"⚠️ Small image:")
+                    print(f"   Liveness: {'✅ Live' if is_live_small else '❌ Not live'}")
+                    print(f"   Confidence: {confidence_small:.3f}")
+                    print(f"   Quality score: {quality_small['quality_score']}/100")
+                
+                elif choice == "8":
+                    print("\n📋 Testing Liveness Detection with Webcam...")
+                    print("⚠️ This feature requires a webcam and real faces")
+                    print("Press 'q' to quit, 'b' to reset blink counter")
+                    
+                    liveness = LivenessDetection()
+                    liveness.reset_blink_counter()
+                    
+                    cap = cv2.VideoCapture(0)
+                    if not cap.isOpened():
+                        print("❌ Failed to open webcam")
+                        continue
+                    
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                    
+                    try:
+                        while True:
+                            ret, frame = cap.read()
+                            if not ret:
+                                break
+                            
+                            # Flip frame for mirror effect
+                            frame = cv2.flip(frame, 1)
+                            
+                            # Verify liveness
+                            is_live, confidence, quality_metrics = liveness.verify_liveness(frame)
+                            
+                            # Draw results on frame
+                            status_text = f"Live: {'✅' if is_live else '❌'}"
+                            confidence_text = f"Confidence: {confidence:.3f}"
+                            quality_text = f"Quality: {quality_metrics['quality_score']}/100"
+                            blink_text = f"Blinks: {liveness.get_blink_count()}"
+                            
+                            cv2.putText(frame, status_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                            cv2.putText(frame, confidence_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                            cv2.putText(frame, quality_text, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                            cv2.putText(frame, blink_text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                            
+                            # Display frame
+                            cv2.imshow("EyeD - Liveness Detection Test", frame)
+                            
+                            key = cv2.waitKey(1) & 0xFF
+                            if key == ord('q'):
+                                break
+                            elif key == ord('b'):
+                                liveness.reset_blink_counter()
+                                print("🔄 Blink counter reset")
+                    
+                    finally:
+                        cap.release()
+                        cv2.destroyAllWindows()
+                
+                elif choice == "9":
+                    print("\n📋 Running Full Test Suite...")
+                    print("This will run comprehensive tests for all liveness detection features")
+                    
+                    # Import and run the test suite
+                    try:
+                        from tests.test_day6_blink_detection import run_tests
+                        success = run_tests()
+                        if success:
+                            print("🎉 All Day 6 tests passed successfully!")
+                        else:
+                            print("❌ Some Day 6 tests failed. Check the output above for details.")
+                    except ImportError as e:
+                        print(f"❌ Failed to import test suite: {e}")
+                        print("Make sure the test file exists and is properly implemented")
+                    except Exception as e:
+                        print(f"❌ Test suite execution failed: {e}")
+                
+                elif choice == "10":
+                    # Test enhanced features
+                    print("\n🔧 Testing Enhanced Features...")
+                    from src.modules.liveness import liveness_detection
+                    
+                    print("🎯 Enhanced Feature Test Suite")
+                    print("="*50)
+                    
+                    # Test configuration system
+                    print("1. Testing Configuration System...")
+                    original_config = liveness_detection.get_config()
+                    print(f"✅ Current EAR threshold: {original_config['ear_threshold']}")
+                    print(f"✅ Current debug mode: {original_config['enable_debug_mode']}")
+                    
+                    # Test configuration update
+                    new_config = {'ear_threshold': 0.25, 'enable_debug_mode': True}
+                    update_success = liveness_detection.update_config(new_config)
+                    print(f"✅ Configuration update: {'Success' if update_success else 'Failed'}")
+                    
+                    # Restore original config
+                    liveness_detection.update_config({'ear_threshold': 0.21, 'enable_debug_mode': False})
+                    
+                    # Test visualization features
+                    print("\n2. Testing Visualization Features...")
+                    has_face_mesh = hasattr(liveness_detection, 'draw_face_mesh')
+                    has_eye_landmarks = hasattr(liveness_detection, 'draw_eye_landmarks')
+                    has_debug_info = hasattr(liveness_detection, 'draw_debug_info')
+                    
+                    print(f"✅ Face mesh drawing: {'Available' if has_face_mesh else 'Not available'}")
+                    print(f"✅ Eye landmark drawing: {'Available' if has_eye_landmarks else 'Not available'}")
+                    print(f"✅ Debug info drawing: {'Available' if has_debug_info else 'Not available'}")
+                    
+                    # Test face alignment assessment
+                    print("\n3. Testing Face Alignment Assessment...")
+                    has_alignment = hasattr(liveness_detection, 'assess_face_alignment')
+                    print(f"✅ Face alignment assessment: {'Available' if has_alignment else 'Not available'}")
+                    
+                    # Test advanced quality algorithms
+                    print("\n4. Testing Advanced Quality Algorithms...")
+                    has_advanced_quality = hasattr(liveness_detection, 'assess_advanced_quality')
+                    print(f"✅ Advanced quality assessment: {'Available' if has_advanced_quality else 'Not available'}")
+                    
+                    if has_advanced_quality:
+                        has_face_region = hasattr(liveness_detection, '_extract_face_region')
+                        has_quality_grade = hasattr(liveness_detection, '_get_quality_grade')
+                        print(f"✅ Face region extraction: {'Available' if has_face_region else 'Not available'}")
+                        print(f"✅ Quality grading system: {'Available' if has_quality_grade else 'Not available'}")
+                    
+                    print("\n🎉 Enhanced Features Test Complete!")
+                    print("="*50)
+                    
+                elif choice == "11":
+                    print("👋 Returning to main menu...")
+                    break
+                
+                else:
+                    print("Invalid choice. Please enter 1-11.")
+                    
+        except ImportError as e:
+            print(f"❌ Failed to import liveness module: {e}")
+            print("Make sure the LivenessDetection module is properly implemented")
+        except Exception as e:
+            print(f"❌ Liveness detection test error: {e}")
             import traceback
             traceback.print_exc()
     
