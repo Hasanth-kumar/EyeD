@@ -7,6 +7,7 @@ tensorflow==2.19.1            # Deep learning backend for DeepFace
 # Data Processing & Analysis
 numpy==2.1.3                  # Numerical computing
 pandas==2.3.2                 # Data manipulation and CSV handling
+statsmodels==0.14.5           # Statistical modeling and trend analysis
 
 # Web Interface & Dashboard
 streamlit==1.48.1             # Modern web dashboard
@@ -20,3 +21,6 @@ retina-face==0.0.17           # High-accuracy face detection
 flask==3.1.2                  # Web API framework
 flask-cors==6.0.1             # Cross-origin resource sharing
 gunicorn==23.0.0              # WSGI server for deployment
+
+# Testing
+pytest==8.4.1                 # Testing framework

@@ -18,6 +18,9 @@ import logging
 from pathlib import Path
 import pickle
 import hashlib
+import time
+import cv2
+from PIL import Image
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -128,61 +131,64 @@ class FaceDatabase:
         except Exception as e:
             logger.error(f"Failed to save user database: {e}")
     
-    def register_user(self, name: str, user_id: str, embedding: np.ndarray, 
-                     image_path: str, metadata: Optional[Dict] = None) -> bool:
+    def register_user(self, name: str, user_id: str, image: np.ndarray, metadata: Optional[Dict] = None) -> bool:
         """
-        Register a new user with face embedding
+        Register a new user with face image and metadata
         
         Args:
             name: User's full name
             user_id: Unique user identifier
-            embedding: Face embedding vector
-            image_path: Path to face image
-            metadata: Additional user metadata
+            image: Face image as numpy array
+            metadata: Additional user metadata (optional)
             
         Returns:
             bool: True if registration successful, False otherwise
         """
         try:
-            # Validate inputs
-            if not name or not user_id or embedding is None:
-                logger.error("Invalid registration parameters")
-                return False
-            
             # Check if user already exists
             if user_id in self.users_db:
-                logger.warning(f"User {user_id} already exists, updating...")
+                logger.warning(f"User {user_id} already exists. Updating information.")
+            
+            # Generate face embedding
+            embedding = self._generate_embedding(image)
+            if embedding is None:
+                logger.error(f"Failed to generate embedding for user {user_id}")
+                return False
             
             # Prepare user data
             user_data = {
                 'name': name,
                 'user_id': user_id,
-                'embedding': embedding.tolist(),
-                'image_path': image_path,
                 'registration_date': datetime.now().isoformat(),
+                'status': 'active',
+                'embedding': embedding.tolist(),
                 'last_updated': datetime.now().isoformat()
             }
             
-            # Add custom metadata if provided
+            # Add metadata if provided
             if metadata:
                 user_data.update(metadata)
+            
+            # Save image to disk
+            image_path = self._save_user_image(user_id, image)
+            if image_path:
+                user_data['image_path'] = str(image_path)
             
             # Store in database
             self.users_db[user_id] = user_data
             
-            # Update cache
+            # Update embeddings cache
             self.embeddings_cache[user_id] = embedding
-            self.user_embeddings[user_id] = user_data
+            self.user_embeddings[user_id] = embedding
             
             # Save to disk
             self._save_database()
-            self._save_cache()
             
             logger.info(f"User {name} ({user_id}) registered successfully")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to register user {name}: {e}")
+            logger.error(f"Failed to register user {user_id}: {e}")
             return False
     
     def load_embeddings(self) -> Dict[str, np.ndarray]:
@@ -483,5 +489,67 @@ class FaceDatabase:
         except Exception as e:
             logger.error(f"Cleanup failed: {e}")
             return 0
+
+    def _save_user_image(self, user_id: str, image: np.ndarray) -> Optional[Path]:
+        """Save user image to disk"""
+        try:
+            # Create filename with timestamp
+            timestamp = int(time.time())
+            filename = f"user_{user_id}_{timestamp}.jpg"
+            filepath = self.data_dir / filename
+            
+            # Convert numpy array to PIL Image and save
+            if len(image.shape) == 3:
+                # RGB image
+                pil_image = Image.fromarray(image)
+            else:
+                # Grayscale image
+                pil_image = Image.fromarray(image, mode='L')
+            
+            pil_image.save(filepath, "JPEG", quality=95)
+            logger.info(f"User image saved: {filepath}")
+            return filepath
+            
+        except Exception as e:
+            logger.error(f"Failed to save user image: {e}")
+            return None
+    
+    def _generate_embedding(self, image: np.ndarray) -> Optional[np.ndarray]:
+        """Generate face embedding using DeepFace"""
+        try:
+            # Import DeepFace here to avoid circular imports
+            from deepface import DeepFace
+            
+            # Ensure image is in RGB format
+            if len(image.shape) == 3 and image.shape[2] == 3:
+                # Already RGB
+                rgb_image = image
+            elif len(image.shape) == 3 and image.shape[2] == 4:
+                # RGBA to RGB
+                rgb_image = image[:, :, :3]
+            else:
+                # Grayscale to RGB
+                rgb_image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+            
+            # Generate embedding using DeepFace
+            embedding = DeepFace.represent(
+                img_path=rgb_image,
+                model_name="Facenet512",
+                enforce_detection=False,
+                align=True
+            )
+            
+            if embedding and len(embedding) > 0:
+                # Convert to numpy array
+                embedding_array = np.array(embedding[0]["embedding"])
+                logger.info(f"Generated embedding with {len(embedding_array)} dimensions")
+                return embedding_array
+            else:
+                logger.error("DeepFace failed to generate embedding")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Failed to generate embedding: {e}")
+            return None
 
 

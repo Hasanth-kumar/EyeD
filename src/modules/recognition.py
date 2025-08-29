@@ -409,6 +409,49 @@ class FaceRecognition:
             logger.error(f"Image recognition failed: {e}")
             return []
     
+    def generate_embedding(self, image: np.ndarray) -> Optional[np.ndarray]:
+        """
+        Generate face embedding for a given image
+        
+        Args:
+            image: Input image as numpy array
+            
+        Returns:
+            Face embedding vector or None if failed
+        """
+        try:
+            # Ensure image is in RGB format
+            if len(image.shape) == 3 and image.shape[2] == 3:
+                # Already RGB
+                rgb_image = image
+            elif len(image.shape) == 3 and image.shape[2] == 4:
+                # RGBA to RGB
+                rgb_image = image[:, :, :3]
+            else:
+                # Grayscale to RGB
+                rgb_image = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
+            
+            # Generate embedding using DeepFace
+            embedding = DeepFace.represent(
+                img_path=rgb_image,
+                model_name="Facenet512",
+                enforce_detection=False,
+                align=True
+            )
+            
+            if embedding and len(embedding) > 0:
+                # Convert to numpy array
+                embedding_array = np.array(embedding[0]["embedding"])
+                logger.info(f"Generated embedding with {len(embedding_array)} dimensions")
+                return embedding_array
+            else:
+                logger.error("DeepFace failed to generate embedding")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Failed to generate embedding: {e}")
+            return None
+    
     def get_recognition_stats(self) -> Dict:
         """
         Get recognition system statistics
