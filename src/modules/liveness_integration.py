@@ -86,7 +86,10 @@ class LivenessIntegration:
     def _load_known_faces(self) -> bool:
         """Load known faces from database"""
         try:
-            success = self.face_recognition.load_known_faces("data/faces")
+            # Use pathlib for cross-platform compatibility
+            from pathlib import Path
+            faces_path = Path("data") / "faces"
+            success = self.face_recognition.load_known_faces(str(faces_path))
             if success:
                 logger.info(f"✅ Loaded {len(self.face_recognition.known_faces)} known faces")
             else:

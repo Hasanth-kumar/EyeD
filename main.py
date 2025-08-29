@@ -179,7 +179,7 @@ def save_frame(frame, results):
 def main():
     """Main entry point for EyeD application"""
     parser = argparse.ArgumentParser(description="EyeD AI Attendance System")
-    parser.add_argument("--mode", choices=["webcam", "dashboard", "register", "test_db", "recognition", "liveness", "integration"], 
+    parser.add_argument("--mode", choices=["webcam", "dashboard", "register", "test_db", "recognition", "liveness", "integration", "attendance"], 
                        default="webcam", help="Application mode")
     parser.add_argument("--camera", type=int, default=0, help="Camera device ID")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
@@ -1048,6 +1048,202 @@ def main():
             print("   Make sure the module is properly installed and accessible")
         except Exception as e:
             print(f"❌ Integration system error: {e}")
+    
+    elif args.mode == "attendance":
+        print("\n📝 EyeD Attendance Management System")
+        print("=" * 50)
+        
+        try:
+            from modules.attendance import AttendanceManager
+            
+            # Initialize attendance manager
+            attendance_manager = AttendanceManager(
+                enable_liveness=True,
+                confidence_threshold=0.6,
+                max_daily_entries=3,
+                enable_analytics=True,
+                enable_transparency=True
+            )
+            
+            print("✅ Attendance Manager initialized successfully!")
+            print(f"   Confidence threshold: {attendance_manager.confidence_threshold}")
+            print(f"   Max daily entries: {attendance_manager.max_daily_entries}")
+            print(f"   Liveness verification: {'enabled' if attendance_manager.enable_liveness else 'disabled'}")
+            print(f"   Analytics: {'enabled' if attendance_manager.enable_analytics else 'disabled'}")
+            print(f"   Transparency: {'enabled' if attendance_manager.enable_transparency else 'disabled'}")
+            
+            while True:
+                print("\n🎯 Available Actions:")
+                print("1. Start Attendance Session")
+                print("2. Process Attendance Frame")
+                print("3. View Attendance Analytics")
+                print("4. Generate Transparency Report")
+                print("5. View Performance Statistics")
+                print("6. Update Configuration")
+                print("7. Run Test Suite")
+                print("8. Exit")
+                
+                choice = input("\nEnter your choice (1-8): ").strip()
+                
+                if choice == "1":
+                    print("\n📝 Starting attendance session...")
+                    user_id = input("Enter user ID: ").strip()
+                    user_name = input("Enter user name: ").strip()
+                    device_info = input("Enter device info (or press Enter for default): ").strip() or "Webcam"
+                    location = input("Enter location (or press Enter for default): ").strip() or "Office"
+                    
+                    if user_id and user_name:
+                        session_id = attendance_manager.start_attendance_session(
+                            user_id=user_id,
+                            user_name=user_name,
+                            device_info=device_info,
+                            location=location
+                        )
+                        print(f"✅ Attendance session started: {session_id}")
+                    else:
+                        print("❌ User ID and name are required")
+                
+                elif choice == "2":
+                    print("\n🔍 Processing attendance frame...")
+                    session_id = input("Enter session ID: ").strip()
+                    
+                    if not session_id:
+                        print("❌ Session ID is required")
+                        continue
+                    
+                    # Initialize webcam for frame capture
+                    cap = cv2.VideoCapture(0)
+                    if not cap.isOpened():
+                        print("❌ Failed to open webcam")
+                        continue
+                    
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                    
+                    print("✅ Webcam ready! Press 'c' to capture frame, 'q' to quit")
+                    
+                    try:
+                        while True:
+                            ret, frame = cap.read()
+                            if not ret:
+                                break
+                            
+                            frame = cv2.flip(frame, 1)  # Mirror effect
+                            
+                            # Display frame
+                            cv2.imshow("EyeD - Attendance Frame Capture", frame)
+                            
+                            key = cv2.waitKey(1) & 0xFF
+                            if key == ord('q'):
+                                break
+                            elif key == ord('c'):
+                                print("📷 Capturing frame for attendance verification...")
+                                result = attendance_manager.process_attendance_frame(frame, session_id)
+                                
+                                if result['success']:
+                                    print("✅ Frame processed successfully!")
+                                    print(f"   User: {result.get('user_name', 'Unknown')}")
+                                    print(f"   Confidence: {result.get('confidence', 0.0):.3f}")
+                                    print(f"   Liveness Verified: {result.get('liveness_verified', False)}")
+                                    print(f"   Attendance Logged: {result.get('attendance_logged', False)}")
+                                else:
+                                    print("❌ Frame processing failed!")
+                                    print(f"   Error: {result.get('error', 'Unknown error')}")
+                                
+                                break
+                    finally:
+                        cap.release()
+                        cv2.destroyAllWindows()
+                
+                elif choice == "3":
+                    print("\n📊 Attendance Analytics:")
+                    analytics = attendance_manager.get_attendance_analytics()
+                    
+                    if 'error' in analytics:
+                        print(f"❌ Analytics Error: {analytics['error']}")
+                    else:
+                        print(f"   Total Entries: {analytics['total_entries']}")
+                        print(f"   Unique Users: {analytics['unique_users']}")
+                        print(f"   Success Rate: {analytics['success_rate']:.1f}%")
+                        print(f"   Average Confidence: {analytics['avg_confidence']:.3f}")
+                        print(f"   Liveness Verification Rate: {analytics['liveness_verification_rate']:.1f}%")
+                
+                elif choice == "4":
+                    print("\n🔍 Generating transparency report...")
+                    session_id = input("Enter session ID: ").strip()
+                    
+                    if not session_id:
+                        print("❌ Session ID is required")
+                        continue
+                    
+                    report = attendance_manager.get_transparency_report(session_id)
+                    
+                    if 'error' in report:
+                        print(f"❌ Report Error: {report['error']}")
+                    else:
+                        print("✅ Transparency report generated successfully!")
+                        print(f"   Session ID: {report['session_info']['session_id']}")
+                        print(f"   User: {report['session_info']['user_name']}")
+                        print(f"   Status: {report['session_info']['status']}")
+                        print(f"   Confidence: {report['verification_details']['confidence']:.3f}")
+                
+                elif choice == "5":
+                    print("\n📈 Performance Statistics:")
+                    stats = attendance_manager.get_performance_stats()
+                    print(f"   Total Attendance Logs: {stats['total_attendance_logs']}")
+                    print(f"   Successful Logs: {stats['successful_logs']}")
+                    print(f"   Success Rate: {stats['success_rate']:.1f}%")
+                    print(f"   Liveness Verifications: {stats['liveness_verifications']}")
+                    print(f"   Average Processing Time: {stats['avg_processing_time_ms']:.1f}ms")
+                    print(f"   Active Sessions: {stats['active_sessions']}")
+                
+                elif choice == "6":
+                    print("\n⚙️ Updating configuration...")
+                    print("Current settings:")
+                    print(f"   Confidence threshold: {attendance_manager.confidence_threshold}")
+                    print(f"   Max daily entries: {attendance_manager.max_daily_entries}")
+                    
+                    try:
+                        new_threshold = float(input("Enter new confidence threshold (0.0-1.0): "))
+                        new_entries = int(input("Enter new max daily entries: "))
+                        
+                        success = attendance_manager.update_config({
+                            'confidence_threshold': new_threshold,
+                            'max_daily_entries': new_entries
+                        })
+                        
+                        if success:
+                            print("✅ Configuration updated successfully!")
+                        else:
+                            print("❌ Failed to update configuration")
+                    except ValueError:
+                        print("❌ Invalid input. Please enter valid numbers.")
+                
+                elif choice == "7":
+                    print("\n🧪 Running test suite...")
+                    try:
+                        from src.tests.test_day8_attendance import run_attendance_tests
+                        success = run_attendance_tests()
+                        if success:
+                            print("✅ All tests passed!")
+                        else:
+                            print("❌ Some tests failed!")
+                    except ImportError:
+                        print("❌ Test module not found")
+                    except Exception as e:
+                        print(f"❌ Test execution error: {e}")
+                
+                elif choice == "8":
+                    print("👋 Exiting attendance mode...")
+                    break
+                
+                else:
+                    print("❌ Invalid choice. Please try again.")
+                    
+        except ImportError as e:
+            print(f"❌ Failed to import attendance module: {e}")
+        except Exception as e:
+            print(f"❌ Attendance mode failed: {e}")
 
 def _create_test_face_image():
     """Create a simple test face image"""
