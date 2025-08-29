@@ -72,6 +72,12 @@ Detect + recognize faces per frame.
 
 Display bounding boxes + names in real-time.
 
+Enhanced Features:
+- Multi-stage detection pipeline (OpenCV + MediaPipe fallback)
+- Configurable detection parameters
+- Real-time confidence scoring display
+- Visual feedback for detection quality
+
 Day 6: Blink Detection (MediaPipe)
 
 Use MediaPipe FaceMesh (468 landmarks).
@@ -82,6 +88,12 @@ Compute EAR (Eye Aspect Ratio) or track openness directly.
 
 Detect blink events → print "Blink detected".
 
+Enhanced Features:
+- Face detection fallback using MediaPipe
+- Face quality assessment (brightness, contrast, alignment)
+- Minimum resolution requirements (480x480)
+- Enhanced error handling and logging
+
 Day 7: Liveness Integration
 
 Integrate recognition (recognition.py) + blink detection (liveness.py).
@@ -91,6 +103,12 @@ A user is marked Verified Live only if:
 ✅ Face recognized
 
 ✅ Blink detected within session
+
+Enhanced Features:
+- Retry logic with different detection parameters
+- Multi-stage verification pipeline
+- Enhanced logging and debugging
+- Performance optimization for real-time processing
 
 Phase 3: Attendance Logging
 
@@ -109,6 +127,12 @@ Add DeepFace confidence score to log.
 
 Print live confirmation (e.g., ✅ Alice logged at 10:32 AM).
 
+Enhanced Features:
+- Comprehensive confidence scoring system
+- Detection failure logging and analysis
+- Performance metrics and benchmarking
+- Quality assessment reporting
+
 Phase 4: Dashboard Development
 
 Day 10: Basic Dashboard Skeleton
@@ -122,6 +146,12 @@ Attendance Logs
 Analytics
 
 Register User
+
+Enhanced Features:
+- Enhanced testing suite with various image qualities
+- Debug logging and visualization tools
+- Performance monitoring dashboard
+- Quality assessment tools
 
 Day 11: Attendance Table View
 
