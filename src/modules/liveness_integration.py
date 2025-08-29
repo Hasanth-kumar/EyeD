@@ -78,7 +78,7 @@ class LivenessIntegration:
         # Load known faces
         self._load_known_faces()
         
-        logger.info("✅ Liveness Integration System initialized successfully")
+        logger.info("[SUCCESS] Liveness Integration System initialized successfully")
         logger.info(f"   Confidence threshold: {confidence_threshold}")
         logger.info(f"   Liveness timeout: {liveness_timeout}s")
         logger.info(f"   Max retry attempts: {max_retry_attempts}")
@@ -91,12 +91,12 @@ class LivenessIntegration:
             faces_path = Path("data") / "faces"
             success = self.face_recognition.load_known_faces(str(faces_path))
             if success:
-                logger.info(f"✅ Loaded {len(self.face_recognition.known_faces)} known faces")
+                logger.info(f"[SUCCESS] Loaded {len(self.face_recognition.known_faces)} known faces")
             else:
-                logger.warning("⚠️ No known faces loaded")
+                logger.warning("[WARNING] No known faces loaded")
             return success
         except Exception as e:
-            logger.error(f"❌ Failed to load known faces: {e}")
+            logger.error(f"[ERROR] Failed to load known faces: {e}")
             return False
     
     def start_verification_session(self) -> str:
@@ -120,7 +120,7 @@ class LivenessIntegration:
             'processing_times': []
         }
         
-        logger.info(f"🔄 Started verification session: {session_id}")
+        logger.info(f"[SESSION] Started verification session: {session_id}")
         return session_id
     
     def verify_user_live(self, frame: np.ndarray, 
@@ -203,7 +203,7 @@ class LivenessIntegration:
             
         except Exception as e:
             error_msg = f"Verification error: {str(e)}"
-            logger.error(f"❌ {error_msg}")
+            logger.error(f"[ERROR] {error_msg}")
             return self._create_failure_result("verification_error", error_msg, start_time)
     
     def _perform_face_recognition(self, frame: np.ndarray) -> Dict:
@@ -232,7 +232,7 @@ class LivenessIntegration:
                     return {'success': False, 'error': 'No faces detected in frame'}
                 
         except Exception as e:
-            logger.error(f"❌ Face recognition error: {e}")
+            logger.error(f"[ERROR] Face recognition error: {e}")
             return {'success': False, 'error': str(e)}
     
     def _perform_liveness_detection(self, frame: np.ndarray) -> Dict:
@@ -257,7 +257,7 @@ class LivenessIntegration:
             }
             
         except Exception as e:
-            logger.error(f"❌ Liveness detection error: {e}")
+            logger.error(f"[ERROR] Liveness detection error: {e}")
             return {'success': False, 'error': str(e)}
     
     def _finalize_verification(self, recognition_result: Dict, 
@@ -328,12 +328,12 @@ class LivenessIntegration:
         
         # Check if session has expired
         if time.time() - self.verification_session['start_time'] > self.liveness_timeout:
-            logger.warning(f"⚠️ Session {session_id} expired")
+            logger.warning(f"[WARNING] Session {session_id} expired")
             return False
         
         # Check if max attempts exceeded
         if self.verification_session['attempts'] >= self.max_retry_attempts:
-            logger.warning(f"⚠️ Session {session_id} exceeded max attempts")
+            logger.warning(f"[WARNING] Session {session_id} exceeded max attempts")
             return False
         
         return True
@@ -367,15 +367,15 @@ class LivenessIntegration:
         
         # Log the result
         if result.success:
-            logger.info(f"✅ User '{result.user_name}' verified successfully in {result.processing_time_ms:.1f}ms")
+            logger.info(f"[SUCCESS] User '{result.user_name}' verified successfully in {result.processing_time_ms:.1f}ms")
             logger.info(f"   Confidence: {result.confidence:.3f}, Quality: {result.face_quality_score:.3f}")
         else:
-            logger.warning(f"❌ Verification failed at stage: {result.verification_stage}")
+            logger.warning(f"[ERROR] Verification failed at stage: {result.verification_stage}")
             if result.error_message:
                 logger.warning(f"   Error: {result.error_message}")
         
         # Always log statistics update
-        logger.debug(f"📊 Statistics updated - Total: {self.total_verifications}, Success: {self.successful_verifications}")
+        logger.debug(f"[STATS] Statistics updated - Total: {self.total_verifications}, Success: {self.successful_verifications}")
     
     def get_verification_stats(self) -> Dict:
         """Get verification statistics"""
@@ -394,7 +394,7 @@ class LivenessIntegration:
         self.avg_processing_time = 0.0
         self.verification_session = None
         self.verification_history = []
-        logger.info("🔄 Verification statistics reset")
+        logger.info("[RESET] Verification statistics reset")
     
     def update_config(self, config: Dict) -> bool:
         """Update configuration parameters"""
@@ -402,22 +402,22 @@ class LivenessIntegration:
             if 'confidence_threshold' in config:
                 self.confidence_threshold = config['confidence_threshold']
                 self.face_recognition.confidence_threshold = config['confidence_threshold']
-                logger.info(f"✅ Confidence threshold updated to: {self.confidence_threshold}")
+                logger.info(f"[SUCCESS] Confidence threshold updated to: {self.confidence_threshold}")
             
             if 'liveness_timeout' in config:
                 self.liveness_timeout = config['liveness_timeout']
-                logger.info(f"✅ Liveness timeout updated to: {self.liveness_timeout}")
+                logger.info(f"[SUCCESS] Liveness timeout updated to: {self.liveness_timeout}")
             
             if 'max_retry_attempts' in config:
                 self.max_retry_attempts = config['max_retry_attempts']
-                logger.info(f"✅ Max retry attempts updated to: {self.max_retry_attempts}")
+                logger.info(f"[SUCCESS] Max retry attempts updated to: {self.max_retry_attempts}")
             
             if 'enable_debug' in config:
                 self.enable_debug = config['enable_debug']
-                logger.info(f"✅ Debug mode {'enabled' if self.enable_debug else 'disabled'}")
+                logger.info(f"[SUCCESS] Debug mode {'enabled' if self.enable_debug else 'disabled'}")
             
             return True
             
         except Exception as e:
-            logger.error(f"❌ Failed to update configuration: {e}")
+            logger.error(f"[ERROR] Failed to update configuration: {e}")
             return False

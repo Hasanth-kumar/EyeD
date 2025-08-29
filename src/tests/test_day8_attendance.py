@@ -132,14 +132,17 @@ class TestAttendanceModule(unittest.TestCase):
         # Verify session exists
         self.assertIn(session_id, self.attendance_manager.active_sessions)
         
+        # Get session before ending it
+        session = self.attendance_manager.active_sessions[session_id]
+        self.assertEqual(session.status, "In Progress")
+        self.assertIsNone(session.end_time)
+        
         # End session
         success = self.attendance_manager.end_attendance_session(session_id)
         self.assertTrue(success)
         
-        # Verify session status updated
-        session = self.attendance_manager.active_sessions[session_id]
-        self.assertEqual(session.status, "Abandoned")
-        self.assertIsNotNone(session.end_time)
+        # Verify session was removed from active sessions
+        self.assertNotIn(session_id, self.attendance_manager.active_sessions)
     
     def test_attendance_eligibility_check(self):
         """Test attendance eligibility checking"""
@@ -148,11 +151,19 @@ class TestAttendanceModule(unittest.TestCase):
         self.assertTrue(can_log)
         
         # Test with existing entries (should allow up to max_daily_entries)
+        # First, we need to actually log some attendance entries to test the limit
         for i in range(3):  # Max daily entries
-            can_log = self.attendance_manager._can_log_attendance("test_001")
-            self.assertTrue(can_log)
+            # Create a mock attendance entry in the database
+            success = self.attendance_manager.attendance_db.log_attendance(
+                name=f"Test User {i}",
+                user_id="test_001",
+                status="Present",
+                confidence=0.8,
+                liveness_verified=True
+            )
+            self.assertTrue(success)
         
-        # Test exceeding daily limit
+        # Now test that the 4th attempt is denied
         can_log = self.attendance_manager._can_log_attendance("test_001")
         self.assertFalse(can_log)
     

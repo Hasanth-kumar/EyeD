@@ -72,11 +72,11 @@ class LivenessDetection:
             self.mp_drawing = mp.solutions.drawing_utils
             self.mp_drawing_styles = mp.solutions.drawing_styles
             
-            logger.info("✅ MediaPipe FaceMesh initialized successfully")
+            logger.info("[SUCCESS] MediaPipe FaceMesh initialized successfully")
             return True
             
         except Exception as e:
-            logger.error(f"❌ Failed to initialize MediaPipe: {str(e)}")
+            logger.error(f"[ERROR] Failed to initialize MediaPipe: {str(e)}")
             return False
     
     def update_config(self, config: Dict) -> bool:
@@ -93,55 +93,55 @@ class LivenessDetection:
             # Update blink detection parameters
             if 'ear_threshold' in config:
                 self.ear_threshold = config['ear_threshold']
-                logger.info(f"✅ EAR threshold updated to: {self.ear_threshold}")
+                logger.info(f"[SUCCESS] EAR threshold updated to: {self.ear_threshold}")
             
             if 'min_consecutive_frames' in config:
                 self.min_consecutive_frames = config['min_consecutive_frames']
-                logger.info(f"✅ Min consecutive frames updated to: {self.min_consecutive_frames}")
+                logger.info(f"[SUCCESS] Min consecutive frames updated to: {self.min_consecutive_frames}")
             
             # Update face quality parameters
             if 'min_resolution' in config:
                 self.min_resolution = config['min_resolution']
-                logger.info(f"✅ Min resolution updated to: {self.min_resolution}")
+                logger.info(f"[SUCCESS] Min resolution updated to: {self.min_resolution}")
             
             if 'min_brightness' in config:
                 self.min_brightness = config['min_brightness']
-                logger.info(f"✅ Min brightness updated to: {self.min_brightness}")
+                logger.info(f"[SUCCESS] Min brightness updated to: {self.min_brightness}")
             
             if 'min_contrast' in config:
                 self.min_contrast = config['min_contrast']
-                logger.info(f"✅ Min contrast updated to: {self.min_contrast}")
+                logger.info(f"[SUCCESS] Min contrast updated to: {self.min_contrast}")
             
             if 'min_sharpness' in config:
                 self.min_sharpness = config['min_sharpness']
-                logger.info(f"✅ Min sharpness updated to: {self.min_sharpness}")
+                logger.info(f"[SUCCESS] Min sharpness updated to: {self.min_sharpness}")
             
             # Update MediaPipe parameters
             if 'min_detection_confidence' in config:
                 self.min_detection_confidence = config['min_detection_confidence']
-                logger.info(f"✅ Min detection confidence updated to: {self.min_detection_confidence}")
+                logger.info(f"[SUCCESS] Min detection confidence updated to: {self.min_detection_confidence}")
             
             if 'min_tracking_confidence' in config:
                 self.min_tracking_confidence = config['min_tracking_confidence']
-                logger.info(f"✅ Min tracking confidence updated to: {self.min_tracking_confidence}")
+                logger.info(f"[SUCCESS] Min tracking confidence updated to: {self.min_tracking_confidence}")
             
             # Update performance parameters
             if 'enable_debug_mode' in config:
                 self.enable_debug_mode = config['enable_debug_mode']
-                logger.info(f"✅ Debug mode {'enabled' if self.enable_debug_mode else 'disabled'}")
+                logger.info(f"[SUCCESS] Debug mode {'enabled' if self.enable_debug_mode else 'disabled'}")
             
             if 'enable_visualization' in config:
                 self.enable_visualization = config['enable_visualization']
-                logger.info(f"✅ Visualization {'enabled' if self.enable_visualization else 'disabled'}")
+                logger.info(f"[SUCCESS] Visualization {'enabled' if self.enable_visualization else 'disabled'}")
             
             if 'frame_skip_rate' in config:
                 self.frame_skip_rate = max(1, config['frame_skip_rate'])
-                logger.info(f"✅ Frame skip rate updated to: {self.frame_skip_rate}")
+                logger.info(f"[SUCCESS] Frame skip rate updated to: {self.frame_skip_rate}")
             
             return True
             
         except Exception as e:
-            logger.error(f"❌ Configuration update failed: {str(e)}")
+            logger.error(f"[ERROR] Configuration update failed: {str(e)}")
             return False
     
     def get_config(self) -> Dict:
@@ -250,7 +250,7 @@ class LivenessDetection:
             return quality_assessment
             
         except Exception as e:
-            logger.error(f"❌ Face quality assessment failed: {str(e)}")
+            logger.error(f"[ERROR] Face quality assessment failed: {str(e)}")
             return {
                 'passed': False,
                 'overall_score': 0,
@@ -274,7 +274,7 @@ class LivenessDetection:
         """
         try:
             if self.mp_face_mesh is None:
-                logger.error("❌ MediaPipe not initialized")
+                logger.error("[ERROR] MediaPipe not initialized")
                 return []
             
             # Convert BGR to RGB
@@ -291,14 +291,14 @@ class LivenessDetection:
                 results = face_mesh.process(rgb_frame)
                 
                 if results.multi_face_landmarks:
-                    logger.debug(f"✅ MediaPipe detected {len(results.multi_face_landmarks)} face(s)")
+                    logger.debug(f"[SUCCESS] MediaPipe detected {len(results.multi_face_landmarks)} face(s)")
                     return results.multi_face_landmarks
                 else:
-                    logger.debug("❌ No faces detected by MediaPipe")
+                    logger.debug("[ERROR] No faces detected by MediaPipe")
                     return []
                     
         except Exception as e:
-            logger.error(f"❌ MediaPipe face detection failed: {str(e)}")
+            logger.error(f"[ERROR] MediaPipe face detection failed: {str(e)}")
             return []
     
     def extract_eye_landmarks(self, face_landmarks) -> Tuple[List, List]:
@@ -324,11 +324,11 @@ class LivenessDetection:
                 landmark = face_landmarks.landmark[idx]
                 right_eye.append([landmark.x, landmark.y, landmark.z])
             
-            logger.debug(f"✅ Extracted {len(left_eye)} left eye and {len(right_eye)} right eye landmarks")
+            logger.debug(f"[SUCCESS] Extracted {len(left_eye)} left eye and {len(right_eye)} right eye landmarks")
             return left_eye, right_eye
             
         except Exception as e:
-            logger.error(f"❌ Eye landmark extraction failed: {str(e)}")
+            logger.error(f"[ERROR] Eye landmark extraction failed: {str(e)}")
             return [], []
     
     def calculate_ear(self, eye_landmarks: List) -> float:
@@ -345,7 +345,7 @@ class LivenessDetection:
         """
         try:
             if len(eye_landmarks) < 6:
-                logger.warning(f"❌ Insufficient eye landmarks: {len(eye_landmarks)}")
+                logger.warning(f"[ERROR] Insufficient eye landmarks: {len(eye_landmarks)}")
                 return 0.0
             
             # Convert to numpy array for easier calculations
@@ -361,17 +361,17 @@ class LivenessDetection:
             
             # Avoid division by zero
             if C == 0:
-                logger.warning("❌ Division by zero in EAR calculation")
+                logger.warning("[ERROR] Division by zero in EAR calculation")
                 return 0.0
             
             # Calculate EAR
             ear = (A + B) / (2.0 * C)
             
-            logger.debug(f"✅ EAR calculated: {ear:.4f}")
+            logger.debug(f"[SUCCESS] EAR calculated: {ear:.4f}")
             return ear
             
         except Exception as e:
-            logger.error(f"❌ EAR calculation failed: {str(e)}")
+            logger.error(f"[ERROR] EAR calculation failed: {str(e)}")
             return 0.0
     
     def detect_blink(self, left_ear: float, right_ear: float) -> bool:
@@ -392,25 +392,25 @@ class LivenessDetection:
             # Check if eyes are closed (EAR below threshold)
             if avg_ear < self.ear_threshold:
                 self.consecutive_frames += 1
-                logger.debug(f"👁️ Eyes closed: EAR={avg_ear:.4f}, consecutive frames={self.consecutive_frames}")
+                logger.debug(f"[INFO] Eyes closed: EAR={avg_ear:.4f}, consecutive frames={self.consecutive_frames}")
                 
                 # Confirm blink after minimum consecutive frames
                 if self.consecutive_frames >= self.min_consecutive_frames:
                     self.blink_counter += 1
-                    logger.info(f"✅ Blink detected! Count: {self.blink_counter}")
+                    logger.info(f"[SUCCESS] Blink detected! Count: {self.blink_counter}")
                     # Reset consecutive frames after blink detection to allow for next blink
                     self.consecutive_frames = 0
                     return True
             else:
                 # Reset consecutive frame counter when eyes are open
                 if self.consecutive_frames > 0:
-                    logger.debug(f"👁️ Eyes opened: EAR={avg_ear:.4f}")
+                    logger.debug(f"[INFO] Eyes opened: EAR={avg_ear:.4f}")
                 self.consecutive_frames = 0
             
             return False
             
         except Exception as e:
-            logger.error(f"❌ Blink detection failed: {str(e)}")
+            logger.error(f"[ERROR] Blink detection failed: {str(e)}")
             return False
     
     def detect_blink_from_frame(self, frame: np.ndarray) -> Dict:
@@ -462,7 +462,7 @@ class LivenessDetection:
             }
             
         except Exception as e:
-            logger.error(f"❌ Blink detection from frame failed: {str(e)}")
+            logger.error(f"[ERROR] Blink detection from frame failed: {str(e)}")
             return {
                 'blink_detected': False,
                 'error': str(e),
@@ -485,14 +485,14 @@ class LivenessDetection:
             
             # Check if quality is sufficient
             if quality_metrics['quality_score'] < 75:
-                logger.warning(f"❌ Insufficient face quality: {quality_metrics['quality_score']}/100")
+                logger.warning(f"[ERROR] Insufficient face quality: {quality_metrics['quality_score']}/100")
                 return False, 0.0, quality_metrics
             
             # Detect faces using MediaPipe
             faces = self.detect_faces_mediapipe(frame)
             
             if not faces:
-                logger.warning("❌ No faces detected for liveness verification")
+                logger.warning("[ERROR] No faces detected for liveness verification")
                 return False, 0.0, quality_metrics
             
             # Process first detected face
@@ -502,7 +502,7 @@ class LivenessDetection:
             left_eye, right_eye = self.extract_eye_landmarks(face_landmarks)
             
             if not left_eye or not right_eye:
-                logger.warning("❌ Failed to extract eye landmarks")
+                logger.warning("[ERROR] Failed to extract eye landmarks")
                 return False, 0.0, quality_metrics
             
             # Calculate EAR for both eyes
@@ -517,14 +517,14 @@ class LivenessDetection:
             
             if blink_detected:
                 confidence = min(confidence + 0.2, 1.0)  # Boost confidence for blink detection
-                logger.info(f"✅ Liveness verified with blink detection! Confidence: {confidence:.2f}")
+                logger.info(f"[SUCCESS] Liveness verified with blink detection! Confidence: {confidence:.2f}")
                 return True, confidence, quality_metrics
             else:
-                logger.info(f"👁️ No blink detected yet. Confidence: {confidence:.2f}")
+                logger.info(f"[INFO] No blink detected yet. Confidence: {confidence:.2f}")
                 return False, confidence, quality_metrics
                 
         except Exception as e:
-            logger.error(f"❌ Liveness verification failed: {str(e)}")
+            logger.error(f"[ERROR] Liveness verification failed: {str(e)}")
             return False, 0.0, {}
     
     def get_blink_count(self) -> int:
@@ -535,7 +535,7 @@ class LivenessDetection:
         """Reset blink counter for new session"""
         self.blink_counter = 0
         self.consecutive_frames = 0
-        logger.info("🔄 Blink counter reset")
+        logger.info("[RESET] Blink counter reset")
     
     def draw_face_mesh(self, frame: np.ndarray, face_landmarks) -> np.ndarray:
         """
@@ -571,7 +571,7 @@ class LivenessDetection:
             return annotated_frame
             
         except Exception as e:
-            logger.error(f"❌ Face mesh drawing failed: {str(e)}")
+            logger.error(f"[ERROR] Face mesh drawing failed: {str(e)}")
             return frame
     
     def assess_face_alignment(self, face_landmarks) -> Dict:
@@ -639,7 +639,7 @@ class LivenessDetection:
             }
             
         except Exception as e:
-            logger.error(f"❌ Face alignment assessment failed: {str(e)}")
+            logger.error(f"[ERROR] Face alignment assessment failed: {str(e)}")
             return {
                 'symmetry_score': 0.0,
                 'symmetry_ok': False,
@@ -683,7 +683,7 @@ class LivenessDetection:
             return annotated_frame
             
         except Exception as e:
-            logger.error(f"❌ Eye landmark drawing failed: {str(e)}")
+            logger.error(f"[ERROR] Eye landmark drawing failed: {str(e)}")
             return frame
     
     def draw_debug_info(self, frame: np.ndarray, face_landmarks, ear_values: Dict = None) -> np.ndarray:
@@ -734,7 +734,7 @@ class LivenessDetection:
             return debug_frame
             
         except Exception as e:
-            logger.error(f"❌ Debug info drawing failed: {str(e)}")
+            logger.error(f"[ERROR] Debug info drawing failed: {str(e)}")
             return frame
     
     def assess_face_alignment(self, face_landmarks) -> Dict:
@@ -802,7 +802,7 @@ class LivenessDetection:
             }
             
         except Exception as e:
-            logger.error(f"❌ Face alignment assessment failed: {str(e)}")
+            logger.error(f"[ERROR] Face alignment assessment failed: {str(e)}")
             return {
                 'symmetry_score': 0.0,
                 'symmetry_ok': False,
@@ -877,7 +877,7 @@ class LivenessDetection:
             }
             
         except Exception as e:
-            logger.error(f"❌ Advanced quality assessment failed: {str(e)}")
+            logger.error(f"[ERROR] Advanced quality assessment failed: {str(e)}")
             return {
                 'error': str(e),
                 'advanced_quality_score': 0,
@@ -910,7 +910,7 @@ class LivenessDetection:
             return frame[y_min:y_max, x_min:x_max]
             
         except Exception as e:
-            logger.error(f"❌ Face region extraction failed: {str(e)}")
+            logger.error(f"[ERROR] Face region extraction failed: {str(e)}")
             return None
     
     def _get_quality_grade(self, score: float) -> str:

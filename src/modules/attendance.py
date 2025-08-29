@@ -21,10 +21,21 @@ from pathlib import Path
 import logging
 
 # Import our existing modules
-from .liveness_integration import LivenessIntegration, VerificationResult
-from ..utils.database import AttendanceDB
-from ..utils.config import ATTENDANCE_FILE
-from ..utils.logger import logger
+# Import our existing modules
+try:
+    from .liveness_integration import LivenessIntegration, VerificationResult
+    from ..utils.database import AttendanceDB
+    from ..utils.config import ATTENDANCE_FILE
+    from ..utils.logger import logger
+except ImportError:
+    # Fallback to absolute imports for testing
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent / "src"))
+    from modules.liveness_integration import LivenessIntegration, VerificationResult
+    from utils.database import AttendanceDB
+    from utils.config import ATTENDANCE_FILE
+    from utils.logger import logger
 
 class AttendanceEntry(NamedTuple):
     """Structured attendance entry"""
@@ -107,7 +118,7 @@ class AttendanceManager:
             'max_processing_time': 5000.0  # 5 seconds
         }
         
-        logger.info("✅ Attendance Manager initialized successfully")
+        logger.info("[SUCCESS] Attendance Manager initialized successfully")
         logger.info(f"   Liveness verification: {'enabled' if enable_liveness else 'disabled'}")
         logger.info(f"   Confidence threshold: {confidence_threshold}")
         logger.info(f"   Max daily entries: {max_daily_entries}")
@@ -150,7 +161,7 @@ class AttendanceManager:
         self.active_sessions[session_id] = session
         
         if self.enable_transparency:
-            logger.info(f"📝 Started attendance session {session_id} for {user_name} ({user_id})")
+            logger.info(f"[SESSION] Started attendance session {session_id} for {user_name} ({user_id})")
             logger.info(f"   Device: {device_info}, Location: {location}")
         
         return session_id
@@ -228,7 +239,7 @@ class AttendanceManager:
                 
         except Exception as e:
             error_msg = f"Frame processing error: {str(e)}"
-            logger.error(f"❌ {error_msg}")
+            logger.error(f"[ERROR] {error_msg}")
             return {
                 'success': False,
                 'error': error_msg,
@@ -322,7 +333,9 @@ class AttendanceManager:
             today = datetime.now().strftime('%Y-%m-%d')
             today_data = self.attendance_db.get_attendance_data(date=today, user_id=user_id)
             
+            # Check if user has already reached the daily limit
             if len(today_data) >= self.max_daily_entries:
+                logger.info(f"User {user_id} has reached daily limit of {self.max_daily_entries} entries")
                 return False
             
             return True
@@ -355,13 +368,19 @@ class AttendanceManager:
                 location=session.location
             )
             
-            # Log to database
+            # Log to database with comprehensive metadata
             success = self.attendance_db.log_attendance(
                 name=entry.name,
                 user_id=entry.user_id,
                 status=entry.status,
                 confidence=entry.confidence,
-                liveness_verified=entry.liveness_verified
+                liveness_verified=entry.liveness_verified,
+                face_quality_score=entry.face_quality_score,
+                processing_time_ms=entry.processing_time_ms,
+                verification_stage=entry.verification_stage,
+                session_id=entry.session_id,
+                device_info=entry.device_info,
+                location=entry.location
             )
             
             if success:
@@ -385,7 +404,7 @@ class AttendanceManager:
                     )
                 
                 if self.enable_transparency:
-                    logger.info(f"✅ Attendance logged successfully for {session.user_name}")
+                    logger.info(f"[SUCCESS] Attendance logged successfully for {session.user_name}")
                     logger.info(f"   Session: {session_id}, Confidence: {session.confidence:.3f}")
                     logger.info(f"   Liveness: {'verified' if session.liveness_verified else 'not verified'}")
                     logger.info(f"   Quality: {session.face_quality_score:.1f}, Time: {session.processing_time_ms:.1f}ms")
@@ -396,7 +415,7 @@ class AttendanceManager:
                 
         except Exception as e:
             error_msg = f"Error logging attendance: {str(e)}"
-            logger.error(f"❌ {error_msg}")
+            logger.error(f"[ERROR] {error_msg}")
             return {'success': False, 'error': error_msg}
     
     def end_attendance_session(self, session_id: str) -> bool:
@@ -410,8 +429,11 @@ class AttendanceManager:
                 )
             
             if self.enable_transparency:
-                logger.info(f"📝 Ended attendance session {session_id} for {session.user_name}")
+                logger.info(f"[SESSION] Ended attendance session {session_id} for {session.user_name}")
                 logger.info(f"   Final status: {self.active_sessions[session_id].status}")
+            
+            # Remove from active sessions when ended
+            del self.active_sessions[session_id]
             
             return True
         return False
@@ -489,7 +511,77 @@ class AttendanceManager:
             
         except Exception as e:
             error_msg = f"Error generating analytics: {str(e)}"
-            logger.error(f"❌ {error_msg}")
+            logger.error(f"[ERROR] {error_msg}")
+            return {'error': error_msg}
+    
+    def get_date_range_analytics(self, start_date: str, end_date: str) -> Dict:
+        """Get comprehensive analytics for a specific date range"""
+        if not self.enable_analytics:
+            return {'error': 'Analytics disabled'}
+        
+        try:
+            # Get attendance data for the date range
+            attendance_data = self.attendance_db.get_attendance_data()
+            
+            # Filter by date range
+            if 'Date' in attendance_data.columns:
+                attendance_data = attendance_data[
+                    (attendance_data['Date'] >= start_date) & 
+                    (attendance_data['Date'] <= end_date)
+                ]
+            
+            if attendance_data.empty:
+                return {
+                    'date_range': {'start': start_date, 'end': end_date},
+                    'total_entries': 0,
+                    'unique_users': 0,
+                    'daily_breakdown': {},
+                    'user_breakdown': {},
+                    'quality_trends': {}
+                }
+            
+            # Calculate comprehensive analytics
+            total_entries = len(attendance_data)
+            unique_users = attendance_data['ID'].nunique()
+            
+            # Daily breakdown
+            daily_breakdown = attendance_data.groupby('Date').agg({
+                'ID': 'count',
+                'Confidence': 'mean',
+                'Liveness_Verified': 'sum'
+            }).rename(columns={'ID': 'entries', 'Confidence': 'avg_confidence', 'Liveness_Verified': 'liveness_verified'})
+            
+            # User breakdown
+            user_breakdown = attendance_data.groupby('ID').agg({
+                'Name': 'first',
+                'Date': 'count',
+                'Confidence': 'mean',
+                'Liveness_Verified': 'sum'
+            }).rename(columns={'Date': 'total_entries', 'Confidence': 'avg_confidence', 'Liveness_Verified': 'liveness_verified'})
+            
+            # Quality trends
+            quality_trends = {
+                'confidence_distribution': {
+                    'high': len(attendance_data[attendance_data['Confidence'] >= 0.8]),
+                    'medium': len(attendance_data[(attendance_data['Confidence'] >= 0.6) & (attendance_data['Confidence'] < 0.8)]),
+                    'low': len(attendance_data[attendance_data['Confidence'] < 0.6])
+                },
+                'liveness_verification_rate': (attendance_data['Liveness_Verified'].sum() / total_entries * 100) if total_entries > 0 else 0,
+                'avg_confidence': attendance_data['Confidence'].mean()
+            }
+            
+            return {
+                'date_range': {'start': start_date, 'end': end_date},
+                'total_entries': total_entries,
+                'unique_users': unique_users,
+                'daily_breakdown': daily_breakdown.to_dict('index'),
+                'user_breakdown': user_breakdown.to_dict('index'),
+                'quality_trends': quality_trends
+            }
+            
+        except Exception as e:
+            error_msg = f"Error generating date range analytics: {str(e)}"
+            logger.error(f"[ERROR] {error_msg}")
             return {'error': error_msg}
     
     def get_transparency_report(self, session_id: str) -> Dict:
@@ -545,28 +637,28 @@ class AttendanceManager:
                 self.confidence_threshold = config['confidence_threshold']
                 if self.liveness_integration:
                     self.liveness_integration.update_config({'confidence_threshold': config['confidence_threshold']})
-                logger.info(f"✅ Confidence threshold updated to: {self.confidence_threshold}")
+                logger.info(f"[SUCCESS] Confidence threshold updated to: {self.confidence_threshold}")
             
             if 'max_daily_entries' in config:
                 self.max_daily_entries = config['max_daily_entries']
-                logger.info(f"✅ Max daily entries updated to: {self.max_daily_entries}")
+                logger.info(f"[SUCCESS] Max daily entries updated to: {self.max_daily_entries}")
             
             if 'enable_liveness' in config:
                 self.enable_liveness = config['enable_liveness']
-                logger.info(f"✅ Liveness verification {'enabled' if self.enable_liveness else 'disabled'}")
+                logger.info(f"[SUCCESS] Liveness verification {'enabled' if self.enable_liveness else 'disabled'}")
             
             if 'enable_analytics' in config:
                 self.enable_analytics = config['enable_analytics']
-                logger.info(f"✅ Analytics {'enabled' if self.enable_analytics else 'disabled'}")
+                logger.info(f"[SUCCESS] Analytics {'enabled' if self.enable_analytics else 'disabled'}")
             
             if 'enable_transparency' in config:
                 self.enable_transparency = config['enable_transparency']
-                logger.info(f"✅ Transparency features {'enabled' if self.enable_transparency else 'disabled'}")
+                logger.info(f"[SUCCESS] Transparency features {'enabled' if self.enable_transparency else 'disabled'}")
             
             return True
             
         except Exception as e:
-            logger.error(f"❌ Failed to update configuration: {e}")
+            logger.error(f"[ERROR] Failed to update configuration: {e}")
             return False
     
     def get_performance_stats(self) -> Dict:
@@ -590,7 +682,7 @@ class AttendanceManager:
         self.avg_processing_time = 0.0
         self.session_counter = 0
         self.active_sessions.clear()
-        logger.info("🔄 Performance statistics reset")
+        logger.info("[RESET] Performance statistics reset")
 
 # Global attendance manager instance
 attendance_manager = AttendanceManager()
