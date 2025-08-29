@@ -88,6 +88,11 @@ EyeD/
    python main.py --mode register
    ```
 
+4. **Live video recognition** (Day 5)
+   ```bash
+   python main.py --mode webcam
+   ```
+
 ## 📅 Implementation Timeline
 
 ### Phase 1: Core Setup & Face Registration (Days 1-4) ✅ **COMPLETED**
@@ -97,7 +102,7 @@ EyeD/
 - ✅ **Day 4**: Face Recognition (Basic) - **COMPLETED**
 
 ### Phase 2: Recognition + Liveness (Days 5-7) 🔄 **IN PROGRESS**
-- ⏳ **Day 5**: Live Video Recognition (Enhanced)
+- ✅ **Day 5**: Live Video Recognition (Enhanced) - **COMPLETED**
 - ⏳ **Day 6**: Blink Detection (MediaPipe + Face Quality)
 - ⏳ **Day 7**: Liveness Integration (Multi-stage Pipeline)
 
@@ -116,21 +121,25 @@ EyeD/
 - ⏳ **Day 15**: Local Demo Video
 - ⏳ **Day 16**: Streamlit Cloud Deployment
 
-## 🎯 **Current Status: 25% Complete (4/16 Days)**
+## 🎯 **Current Status: 31% Complete (5/16 Days)**
 
 ### ✅ **What's Working Now:**
 - **Complete face registration system** with webcam and image upload
 - **Robust face database** with efficient embedding storage
 - **Advanced face recognition** with confidence scoring
-- **Comprehensive testing suite** (9 tests passing)
+- **Live video recognition** with real-time webcam processing
+- **Multi-stage detection pipeline** (MediaPipe + OpenCV fallback)
+- **Comprehensive testing suite** (16 tests passing)
 - **Performance optimized** (sub-millisecond comparisons)
 
 ### 🚀 **Enhanced Features Implemented:**
-- **Multi-stage detection pipeline** foundation
+- **Multi-stage detection pipeline** (MediaPipe primary + OpenCV fallback)
 - **Configurable confidence thresholds**
-- **Real-time performance monitoring**
+- **Real-time performance monitoring** (FPS display)
+- **Live video recognition** with visual overlays
 - **Robust error handling and logging**
 - **Database integrity verification**
+- **Interactive webcam controls** (save, reload, quit)
 
 ### Phase 3: Attendance Logging (Days 8-9)
 - ⏳ **Day 8**: Attendance Logging (CSV)
@@ -151,13 +160,20 @@ EyeD/
 
 ### Running Tests
 ```bash
+# Test dependencies
 python test_dependencies.py
+
+# Test Day 5 functionality
+python src/tests/test_day5_live_video.py
+
+# Run Day 5 demo
+python demo_day5.py
 ```
 
 ### Project Status
-- **Current Day**: 1
-- **Phase**: Core Setup & Face Registration
-- **Next Milestone**: Face Registration (Day 2)
+- **Current Day**: 5
+- **Phase**: Recognition + Liveness
+- **Next Milestone**: Blink Detection (Day 6)
 
 ## 📊 Demo & Results
 

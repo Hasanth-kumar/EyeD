@@ -16,6 +16,166 @@ import cv2
 # Add src directory to path for imports
 sys.path.append(str(Path(__file__).parent / "src"))
 
+def run_webcam_recognition(camera_id: int = 0, debug: bool = False):
+    """Run real-time webcam face recognition"""
+    print("🎥 Initializing webcam...")
+    
+    # Import FaceRecognition here to avoid circular import issues
+    from modules.recognition import FaceRecognition
+    
+    # Initialize face recognition system
+    recognition = FaceRecognition(confidence_threshold=0.6, use_mediapipe=True)
+    
+    # Load known faces
+    if not recognition.load_known_faces("data/faces"):
+        print("⚠️ No known faces loaded. Please register users first.")
+        print("   Use: python main.py --mode register")
+        return
+    
+    # Initialize webcam
+    cap = cv2.VideoCapture(camera_id)
+    if not cap.isOpened():
+        print(f"❌ Failed to open camera {camera_id}")
+        return
+    
+    # Set camera properties
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    cap.set(cv2.CAP_PROP_FPS, 30)
+    
+    print("✅ Webcam initialized successfully")
+    print("📱 Press 'q' to quit, 's' to save frame, 'r' to reload faces")
+    print("🎯 Face detection and recognition active...")
+    
+    frame_count = 0
+    fps_start_time = cv2.getTickCount()
+    fps = 0.0  # Initialize fps variable
+    
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                print("❌ Failed to read frame from webcam")
+                break
+            
+            # Flip frame horizontally for mirror effect
+            frame = cv2.flip(frame, 1)
+            
+            # Process frame for face recognition
+            recognition_results = recognition.recognize_user(frame)
+            
+            # Draw results on frame
+            frame = draw_recognition_results(frame, recognition_results, debug)
+            
+            # Calculate and display FPS
+            frame_count += 1
+            if frame_count % 30 == 0:  # Update FPS every 30 frames
+                current_time = cv2.getTickCount()
+                fps = 30.0 / ((current_time - fps_start_time) / cv2.getTickFrequency())
+                fps_start_time = current_time
+                frame_count = 0
+            
+            # Display FPS
+            cv2.putText(frame, f"FPS: {fps:.1f}", (10, 30), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            
+            # Display frame
+            cv2.imshow("EyeD - Live Face Recognition", frame)
+            
+            # Handle key presses
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('q'):
+                print("👋 Quitting webcam mode...")
+                break
+            elif key == ord('s'):
+                save_frame(frame, recognition_results)
+            elif key == ord('r'):
+                print("🔄 Reloading known faces...")
+                recognition.load_known_faces("data/faces")
+                print(f"✅ Reloaded {len(recognition.known_faces)} faces")
+    
+    except KeyboardInterrupt:
+        print("\n👋 Interrupted by user")
+    except Exception as e:
+        print(f"❌ Webcam recognition error: {e}")
+    finally:
+        cap.release()
+        cv2.destroyAllWindows()
+        print("✅ Webcam mode closed")
+
+def draw_recognition_results(frame, results, debug=False):
+    """Draw recognition results on frame"""
+    for result in results:
+        x, y, w, h = result['bbox']
+        name = result['name']
+        confidence = result['confidence']
+        recognized = result['recognized']
+        
+        # Choose color based on recognition status
+        if recognized:
+            color = (0, 255, 0)  # Green for recognized
+            thickness = 2
+        else:
+            color = (0, 0, 255)  # Red for unknown
+            thickness = 1
+        
+        # Draw bounding box
+        cv2.rectangle(frame, (x, y), (x + w, y + h), color, thickness)
+        
+        # Draw name and confidence
+        label = f"{name}: {confidence:.2f}"
+        label_size = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)[0]
+        
+        # Background rectangle for text
+        cv2.rectangle(frame, (x, y - label_size[1] - 10), 
+                     (x + label_size[0], y), color, -1)
+        
+        # Text
+        cv2.putText(frame, label, (x, y - 5), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        
+        # Debug info
+        if debug:
+            cv2.putText(frame, f"Box: ({x},{y},{w},{h})", (x, y + h + 20),
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 0), 1)
+    
+    return frame
+
+def save_frame(frame, results):
+    """Save current frame with recognition results"""
+    try:
+        # Create data/faces directory if it doesn't exist
+        faces_dir = Path("data/faces")
+        faces_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate timestamp-based filename
+        timestamp = cv2.getTickCount()
+        filename = faces_dir / f"capture_{timestamp}.jpg"
+        
+        # Save frame
+        cv2.imwrite(str(filename), frame)
+        print(f"💾 Frame saved as {filename}")
+        
+        # Save results to log
+        if results:
+            print("📊 Recognition results:")
+            for result in results:
+                print(f"  - {result['name']}: {result['confidence']:.3f}")
+        
+        # Also save recognition metadata
+        metadata_file = faces_dir / f"capture_{timestamp}_metadata.txt"
+        with open(metadata_file, 'w') as f:
+            f.write(f"Capture Time: {timestamp}\n")
+            f.write(f"Frame Size: {frame.shape[1]}x{frame.shape[0]}\n")
+            f.write("Recognition Results:\n")
+            for result in results:
+                f.write(f"  - {result['name']}: {result['confidence']:.3f}\n")
+        
+        print(f"📝 Metadata saved as {metadata_file}")
+        
+    except Exception as e:
+        print(f"❌ Failed to save frame: {e}")
+
 def main():
     """Main entry point for EyeD application"""
     parser = argparse.ArgumentParser(description="EyeD AI Attendance System")
@@ -31,8 +191,13 @@ def main():
     
     if args.mode == "webcam":
         print("🎥 Starting webcam mode...")
-        # TODO: Import and run webcam recognition
-        print("⚠️ Webcam mode not yet implemented (Day 5)")
+        try:
+            from modules.recognition import FaceRecognition
+            run_webcam_recognition(args.camera, args.debug)
+        except ImportError as e:
+            print(f"❌ Failed to import recognition module: {e}")
+        except Exception as e:
+            print(f"❌ Webcam mode failed: {e}")
         
     elif args.mode == "dashboard":
         print("📊 Starting Streamlit dashboard...")
