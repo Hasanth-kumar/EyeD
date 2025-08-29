@@ -11,7 +11,7 @@ import shutil
 from pathlib import Path
 
 # Add src directory to path for imports
-sys.path.append(str(Path(__file__).parent / "src"))
+sys.path.append(str(Path(__file__).parent.parent))
 
 def test_imports():
     """Test that all required modules can be imported"""
@@ -39,7 +39,7 @@ def test_imports():
         return False
     
     try:
-        from modules.registration import FaceRegistration
+        from src.modules.registration import FaceRegistration
         print("✅ FaceRegistration module imported successfully")
     except ImportError as e:
         print(f"❌ FaceRegistration import failed: {e}")
@@ -55,7 +55,7 @@ def test_registration_initialization():
         # Create temporary directory for testing
         temp_dir = tempfile.mkdtemp(prefix="eyed_test_")
         
-        from modules.registration import FaceRegistration
+        from src.modules.registration import FaceRegistration
         registration = FaceRegistration(data_dir=temp_dir)
         
         # Check if data directory was created
@@ -97,7 +97,7 @@ def test_face_detection():
     try:
         # Create temporary directory
         temp_dir = tempfile.mkdtemp(prefix="eyed_test_")
-        from modules.registration import FaceRegistration
+        from src.modules.registration import FaceRegistration
         import numpy as np
         registration = FaceRegistration(data_dir=temp_dir)
         
@@ -172,7 +172,7 @@ def test_database_operations():
     try:
         # Create temporary directory
         temp_dir = tempfile.mkdtemp(prefix="eyed_test_")
-        from modules.registration import FaceRegistration
+        from src.modules.registration import FaceRegistration
         registration = FaceRegistration(data_dir=temp_dir)
         
         # Test initial state

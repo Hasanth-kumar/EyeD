@@ -222,6 +222,8 @@ class LivenessDetection:
             if sharpness_ok: quality_score += 25
             
             quality_assessment = {
+                'passed': quality_score >= 50,  # Pass if at least 50% quality
+                'overall_score': quality_score,
                 'resolution_ok': resolution_ok,
                 'brightness_ok': brightness_ok,
                 'contrast_ok': contrast_ok,
@@ -230,8 +232,19 @@ class LivenessDetection:
                 'brightness': brightness,
                 'contrast': contrast,
                 'sharpness': sharpness,
-                'resolution': (width, height)
+                'resolution': (width, height),
+                'issues': []
             }
+            
+            # Add issues if quality checks fail
+            if not resolution_ok:
+                quality_assessment['issues'].append('Low resolution')
+            if not brightness_ok:
+                quality_assessment['issues'].append('Poor brightness')
+            if not contrast_ok:
+                quality_assessment['issues'].append('Low contrast')
+            if not sharpness_ok:
+                quality_assessment['issues'].append('Blurry image')
             
             logger.debug(f"Face quality assessment: {quality_assessment}")
             return quality_assessment
@@ -239,12 +252,14 @@ class LivenessDetection:
         except Exception as e:
             logger.error(f"❌ Face quality assessment failed: {str(e)}")
             return {
+                'passed': False,
+                'overall_score': 0,
                 'resolution_ok': False,
                 'brightness_ok': False,
                 'contrast_ok': False,
                 'sharpness_ok': False,
                 'quality_score': 0,
-                'error': str(e)
+                'issues': [str(e)]
             }
     
     def detect_faces_mediapipe(self, frame: np.ndarray) -> List:
@@ -397,6 +412,62 @@ class LivenessDetection:
         except Exception as e:
             logger.error(f"❌ Blink detection failed: {str(e)}")
             return False
+    
+    def detect_blink_from_frame(self, frame: np.ndarray) -> Dict:
+        """
+        Detect blink from a frame (wrapper for liveness integration)
+        
+        Args:
+            frame: Input frame
+            
+        Returns:
+            Dictionary with blink detection results
+        """
+        try:
+            # Detect faces using MediaPipe
+            faces = self.detect_faces_mediapipe(frame)
+            
+            if not faces:
+                return {
+                    'blink_detected': False,
+                    'error': 'No faces detected',
+                    'ear_values': None
+                }
+            
+            # Process first detected face
+            face_landmarks = faces[0]
+            
+            # Extract eye landmarks
+            left_eye, right_eye = self.extract_eye_landmarks(face_landmarks)
+            
+            if not left_eye or not right_eye:
+                return {
+                    'blink_detected': False,
+                    'error': 'Failed to extract eye landmarks',
+                    'ear_values': None
+                }
+            
+            # Calculate EAR for both eyes
+            left_ear = self.calculate_ear(left_eye)
+            right_ear = self.calculate_ear(right_eye)
+            
+            # Detect blink
+            blink_detected = self.detect_blink(left_ear, right_ear)
+            
+            return {
+                'blink_detected': blink_detected,
+                'error': None,
+                'ear_values': (left_ear, right_ear),
+                'blink_count': self.blink_counter
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Blink detection from frame failed: {str(e)}")
+            return {
+                'blink_detected': False,
+                'error': str(e),
+                'ear_values': None
+            }
     
     def verify_liveness(self, frame: np.ndarray) -> Tuple[bool, float, Dict]:
         """

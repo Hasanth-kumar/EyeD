@@ -141,19 +141,31 @@ class FaceRecognition:
         Returns:
             List of face bounding boxes (x, y, w, h)
         """
+        # Validate input frame
+        if frame is None or frame.size == 0:
+            logger.warning("Invalid frame provided to detect_faces")
+            return []
+        
         # Try MediaPipe first if available
         if self.use_mediapipe and self.mediapipe_detector is not None:
             face_boxes = self._detect_faces_mediapipe(frame)
             if face_boxes:
+                logger.debug(f"MediaPipe detected {len(face_boxes)} faces")
                 return face_boxes
+            else:
+                logger.debug("MediaPipe detected no faces, trying OpenCV fallback")
         
         # Fallback to OpenCV
         if self.face_cascade is not None:
             face_boxes = self._detect_faces_opencv(frame)
             if face_boxes:
+                logger.debug(f"OpenCV detected {len(face_boxes)} faces")
                 return face_boxes
+            else:
+                logger.debug("OpenCV detected no faces")
         
-        logger.warning("No face detection method available")
+        # If we get here, no faces were detected by any method
+        logger.debug("No faces detected by any available method")
         return []
     
     def _detect_faces_mediapipe(self, frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
@@ -236,6 +248,7 @@ class FaceRecognition:
                 face_rgb = face_img
             
             # Extract embedding using DeepFace
+            # DeepFace.represent expects img_path but can handle numpy arrays
             embedding = DeepFace.represent(
                 img_path=face_rgb,
                 model_name="VGG-Face",

@@ -16,7 +16,7 @@ import time
 import traceback
 
 # Add src directory to path for imports
-sys.path.append(str(Path(__file__).parent / "src"))
+sys.path.append(str(Path(__file__).parent.parent))
 
 def test_recognition_initialization():
     """Test 1: Recognition system initialization"""
@@ -24,7 +24,7 @@ def test_recognition_initialization():
     print("=" * 50)
     
     try:
-        from modules.recognition import FaceRecognition
+        from src.modules.recognition import FaceRecognition
         
         # Test with default confidence threshold
         recognition = FaceRecognition()
@@ -59,7 +59,7 @@ def test_face_detection():
     print("=" * 50)
     
     try:
-        from modules.recognition import FaceRecognition
+        from src.modules.recognition import FaceRecognition
         
         recognition = FaceRecognition()
         
@@ -104,7 +104,7 @@ def test_embedding_extraction():
     print("=" * 50)
     
     try:
-        from modules.recognition import FaceRecognition
+        from src.modules.recognition import FaceRecognition
         
         recognition = FaceRecognition()
         
@@ -139,7 +139,7 @@ def test_embedding_comparison():
     print("=" * 50)
     
     try:
-        from modules.recognition import FaceRecognition
+        from src.modules.recognition import FaceRecognition
         
         recognition = FaceRecognition()
         
@@ -187,7 +187,7 @@ def test_face_recognition():
     print("=" * 50)
     
     try:
-        from modules.recognition import FaceRecognition
+        from src.modules.recognition import FaceRecognition
         
         recognition = FaceRecognition()
         
@@ -229,7 +229,7 @@ def test_frame_processing():
     print("=" * 50)
     
     try:
-        from modules.recognition import FaceRecognition
+        from src.modules.recognition import FaceRecognition
         
         recognition = FaceRecognition()
         
@@ -283,7 +283,7 @@ def test_image_recognition():
     print("=" * 50)
     
     try:
-        from modules.recognition import FaceRecognition
+        from src.modules.recognition import FaceRecognition
         
         recognition = FaceRecognition()
         
@@ -330,7 +330,7 @@ def test_recognition_stats():
     print("=" * 50)
     
     try:
-        from modules.recognition import FaceRecognition
+        from src.modules.recognition import FaceRecognition
         
         recognition = FaceRecognition()
         
@@ -380,7 +380,7 @@ def test_performance():
     print("=" * 50)
     
     try:
-        from modules.recognition import FaceRecognition
+        from src.modules.recognition import FaceRecognition
         
         recognition = FaceRecognition()
         

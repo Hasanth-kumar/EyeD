@@ -179,7 +179,7 @@ def save_frame(frame, results):
 def main():
     """Main entry point for EyeD application"""
     parser = argparse.ArgumentParser(description="EyeD AI Attendance System")
-    parser.add_argument("--mode", choices=["webcam", "dashboard", "register", "test_db", "recognition", "liveness"], 
+    parser.add_argument("--mode", choices=["webcam", "dashboard", "register", "test_db", "recognition", "liveness", "integration"], 
                        default="webcam", help="Application mode")
     parser.add_argument("--camera", type=int, default=0, help="Camera device ID")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
@@ -898,8 +898,171 @@ def main():
             import traceback
             traceback.print_exc()
     
-    print("\n✅ EyeD system initialized successfully!")
-    print("💡 Use --help for more options")
+    elif args.mode == "integration":
+        print("\n🔗 EyeD Liveness Integration System")
+        print("=" * 50)
+        
+        try:
+            from src.modules.liveness_integration import LivenessIntegration
+            
+            # Initialize with better defaults
+            integration = LivenessIntegration(
+                confidence_threshold=0.6,
+                liveness_timeout=30.0,  # Increased timeout for real-time use
+                max_retry_attempts=3,
+                enable_debug=True
+            )
+            
+            print("✅ System initialized successfully!")
+            print(f"   Confidence threshold: {integration.confidence_threshold}")
+            print(f"   Liveness timeout: {integration.liveness_timeout}s")
+            print(f"   Max retry attempts: {integration.max_retry_attempts}")
+            
+            while True:
+                print("\n🎯 Available Actions:")
+                print("1. Start Webcam Verification")
+                print("2. Test Pipeline with Sample Images")
+                print("3. View System Statistics")
+                print("4. Update Configuration")
+                print("5. Exit")
+                
+                choice = input("\nEnter your choice (1-5): ").strip()
+                
+                if choice == "1":
+                    print("\n📹 Starting webcam verification...")
+                    session_id = integration.start_verification_session()
+                    print(f"✅ Session started: {session_id}")
+                    
+                    # Initialize webcam
+                    cap = cv2.VideoCapture(0)
+                    if not cap.isOpened():
+                        print("❌ Failed to open webcam")
+                        continue
+                    
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                    
+                    print("✅ Webcam ready! Press 'q' to quit, 'r' to reset session")
+                    
+                    try:
+                        while True:
+                            ret, frame = cap.read()
+                            if not ret:
+                                break
+                            
+                            frame = cv2.flip(frame, 1)  # Mirror effect
+                            
+                            # Perform verification
+                            result = integration.verify_user_live(frame, session_id)
+                            
+                            # Draw results on frame
+                            if result.success:
+                                cv2.rectangle(frame, (10, 10), (300, 80), (0, 255, 0), -1)
+                                cv2.putText(frame, f"VERIFIED: {result.user_name}", (20, 40), 
+                                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                                cv2.putText(frame, f"Conf: {result.confidence:.3f}", (20, 65), 
+                                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                            else:
+                                cv2.rectangle(frame, (10, 10), (300, 80), (0, 0, 255), -1)
+                                cv2.putText(frame, "VERIFICATION FAILED", (20, 40), 
+                                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                                cv2.putText(frame, f"Stage: {result.verification_stage}", (20, 65), 
+                                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                                
+                                cv2.imshow("EyeD - Liveness Integration", frame)
+                                
+                                key = cv2.waitKey(1) & 0xFF
+                                if key == ord('q'):
+                                    break
+                                elif key == ord('r'):
+                                    session_id = integration.start_verification_session()
+                                    print(f"🔄 New session: {session_id}")
+                        
+                    finally:
+                        cap.release()
+                        cv2.destroyAllWindows()
+                    
+                elif choice == "2":
+                    print("\n🧪 Testing pipeline with sample images...")
+                    session_id = integration.start_verification_session()
+                    
+                    # Create test images
+                    import numpy as np
+                    test_images = [
+                        ("Empty", np.array([])),
+                        ("Small", np.ones((100, 100, 3), dtype=np.uint8) * 128),
+                        ("Face-like", _create_test_face_image())
+                    ]
+                    
+                    for name, img in test_images:
+                        if img.size == 0:
+                            print(f"   {name}: Skipped (empty)")
+                            continue
+                        
+                        try:
+                            result = integration.verify_user_live(img, session_id)
+                            print(f"   {name}: {result.verification_stage} - {result.error_message or 'Success'}")
+                        except Exception as e:
+                            print(f"   {name}: Error - {e}")
+                
+                elif choice == "3":
+                    stats = integration.get_verification_stats()
+                    print("\n📊 System Statistics:")
+                    print(f"   Total verifications: {stats['total_verifications']}")
+                    print(f"   Success rate: {stats['success_rate']:.1f}%")
+                    print(f"   Avg processing time: {stats['avg_processing_time_ms']:.1f}ms")
+                    if stats['current_session']:
+                        session = stats['current_session']
+                        print(f"   Current session: {session['id'][:8]}...")
+                        print(f"   Session attempts: {session['attempts']}")
+                
+                elif choice == "4":
+                    print("\n⚙️ Update Configuration:")
+                    try:
+                        new_threshold = float(input("New confidence threshold (0.0-1.0): "))
+                        new_timeout = float(input("New liveness timeout (seconds): "))
+                        new_retries = int(input("New max retry attempts: "))
+                        
+                        config = {
+                            'confidence_threshold': new_threshold,
+                            'liveness_timeout': new_timeout,
+                            'max_retry_attempts': new_retries
+                        }
+                        
+                        if integration.update_config(config):
+                            print("✅ Configuration updated successfully!")
+                        else:
+                            print("❌ Failed to update configuration")
+                    except ValueError:
+                        print("❌ Invalid input values")
+                
+                elif choice == "5":
+                    print("👋 Exiting integration mode...")
+                    break
+                
+                else:
+                    print("❌ Invalid choice. Please enter 1-5.")
+                    
+        except ImportError as e:
+            print(f"❌ Failed to import liveness integration module: {e}")
+            print("   Make sure the module is properly installed and accessible")
+        except Exception as e:
+            print(f"❌ Integration system error: {e}")
+
+def _create_test_face_image():
+    """Create a simple test face image"""
+    import cv2
+    import numpy as np
+    
+    image = np.ones((480, 640, 3), dtype=np.uint8) * 128
+    
+    # Add face-like features
+    cv2.ellipse(image, (320, 240), (150, 200), 0, 0, 360, (200, 200, 200), -1)
+    cv2.circle(image, (280, 180), 20, (50, 50, 50), -1)
+    cv2.circle(image, (360, 180), 20, (50, 50, 50), -1)
+    cv2.circle(image, (320, 250), 15, (100, 100, 100), -1)
+    
+    return image
 
 if __name__ == "__main__":
     main()

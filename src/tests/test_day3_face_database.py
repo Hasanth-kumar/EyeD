@@ -26,7 +26,7 @@ def test_face_database():
     
     try:
         # Import the new module
-        from modules.face_db import FaceDatabase
+        from src.modules.face_db import FaceDatabase
         print("✅ FaceDatabase module imported successfully")
         
         # Test 1: Database Initialization
