@@ -1,12 +1,13 @@
 """
 Face Recognition Module for EyeD AI Attendance System
-Day 4 Implementation: Face Recognition (Basic)
+Day 5 Implementation: Live Video Recognition
 
 This module handles:
-- Face detection in frames
-- Face recognition using DeepFace
-- Matching with stored embeddings
-- Confidence scoring
+- Real-time face detection in video frames
+- Live face recognition using DeepFace
+- Multi-stage detection pipeline (MediaPipe/OpenCV)
+- Performance optimization for video streams
+- Confidence scoring and frame processing
 """
 
 import cv2
@@ -17,6 +18,17 @@ import logging
 from deepface import DeepFace
 import os
 
+# Try to import MediaPipe for enhanced detection
+try:
+    import mediapipe as mp
+    MEDIAPIPE_AVAILABLE = True
+    mp_face_detection = mp.solutions.face_detection
+    mp_drawing = mp.solutions.drawing_utils
+except ImportError:
+    MEDIAPIPE_AVAILABLE = False
+    mp_face_detection = None
+    mp_drawing = None
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,20 +36,42 @@ logger = logging.getLogger(__name__)
 class FaceRecognition:
     """Face recognition handler for EyeD AI Attendance System"""
     
-    def __init__(self, confidence_threshold: float = 0.6):
+    def __init__(self, confidence_threshold: float = 0.6, use_mediapipe: bool = True):
         """
         Initialize Face Recognition system
         
         Args:
             confidence_threshold: Minimum confidence for recognition (0.0 to 1.0)
+            use_mediapipe: Whether to use MediaPipe as primary detection method
         """
         self.confidence_threshold = confidence_threshold
+        self.use_mediapipe = use_mediapipe and MEDIAPIPE_AVAILABLE
         self.known_faces = {}
         self.known_names = {}
         self.face_cascade = None
+        self.mediapipe_detector = None
+        
         self._load_face_cascade()
+        self._load_mediapipe_detector()
         
         logger.info(f"Face Recognition initialized with confidence threshold: {confidence_threshold}")
+        logger.info(f"MediaPipe detection: {'Enabled' if self.use_mediapipe else 'Disabled'}")
+    
+    def _load_mediapipe_detector(self):
+        """Load MediaPipe face detection model"""
+        if self.use_mediapipe and MEDIAPIPE_AVAILABLE:
+            try:
+                self.mediapipe_detector = mp_face_detection.FaceDetection(
+                    model_selection=0,  # 0 for short-range, 1 for full-range
+                    min_detection_confidence=0.5
+                )
+                logger.info("MediaPipe face detection model loaded successfully")
+            except Exception as e:
+                logger.warning(f"Failed to load MediaPipe detector: {e}")
+                self.mediapipe_detector = None
+                self.use_mediapipe = False
+        else:
+            self.mediapipe_detector = None
     
     def _load_face_cascade(self):
         """Load OpenCV face detection cascade classifier"""
@@ -99,7 +133,7 @@ class FaceRecognition:
     
     def detect_faces(self, frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
         """
-        Detect faces in a frame using OpenCV
+        Detect faces in a frame using MediaPipe (primary) or OpenCV (fallback)
         
         Args:
             frame: Input frame/image (BGR format)
@@ -107,10 +141,60 @@ class FaceRecognition:
         Returns:
             List of face bounding boxes (x, y, w, h)
         """
-        if self.face_cascade is None:
-            logger.warning("Face cascade not loaded, cannot detect faces")
-            return []
+        # Try MediaPipe first if available
+        if self.use_mediapipe and self.mediapipe_detector is not None:
+            face_boxes = self._detect_faces_mediapipe(frame)
+            if face_boxes:
+                return face_boxes
         
+        # Fallback to OpenCV
+        if self.face_cascade is not None:
+            face_boxes = self._detect_faces_opencv(frame)
+            if face_boxes:
+                return face_boxes
+        
+        logger.warning("No face detection method available")
+        return []
+    
+    def _detect_faces_mediapipe(self, frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
+        """Detect faces using MediaPipe"""
+        try:
+            # Convert BGR to RGB for MediaPipe
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Detect faces
+            results = self.mediapipe_detector.process(frame_rgb)
+            
+            face_boxes = []
+            if results.detections:
+                h, w, _ = frame.shape
+                
+                for detection in results.detections:
+                    bbox = detection.location_data.relative_bounding_box
+                    
+                    # Convert relative coordinates to absolute
+                    x = int(bbox.xmin * w)
+                    y = int(bbox.ymin * h)
+                    width = int(bbox.width * w)
+                    height = int(bbox.height * h)
+                    
+                    # Ensure coordinates are within frame bounds
+                    x = max(0, x)
+                    y = max(0, y)
+                    width = min(width, w - x)
+                    height = min(height, h - y)
+                    
+                    face_boxes.append((x, y, width, height))
+            
+            logger.debug(f"MediaPipe detected {len(face_boxes)} faces")
+            return face_boxes
+            
+        except Exception as e:
+            logger.error(f"MediaPipe face detection failed: {e}")
+            return []
+    
+    def _detect_faces_opencv(self, frame: np.ndarray) -> List[Tuple[int, int, int, int]]:
+        """Detect faces using OpenCV cascade classifier"""
         try:
             # Convert to grayscale for face detection
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -126,11 +210,11 @@ class FaceRecognition:
             # Convert to list of tuples
             face_boxes = [(x, y, w, h) for (x, y, w, h) in faces]
             
-            logger.debug(f"Detected {len(face_boxes)} faces in frame")
+            logger.debug(f"OpenCV detected {len(face_boxes)} faces")
             return face_boxes
             
         except Exception as e:
-            logger.error(f"Face detection failed: {e}")
+            logger.error(f"OpenCV face detection failed: {e}")
             return []
     
     def extract_face_embedding(self, face_img: np.ndarray) -> Optional[np.ndarray]:
@@ -323,7 +407,9 @@ class FaceRecognition:
             'known_faces_count': len(self.known_faces),
             'confidence_threshold': self.confidence_threshold,
             'face_cascade_loaded': self.face_cascade is not None,
-            'total_known_names': len(self.known_names)
+            'mediapipe_available': self.use_mediapipe and self.mediapipe_detector is not None,
+            'total_known_names': len(self.known_names),
+            'detection_methods': ['MediaPipe', 'OpenCV'] if self.use_mediapipe else ['OpenCV']
         }
 
 # Global recognition instance
