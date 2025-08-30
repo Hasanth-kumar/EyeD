@@ -203,7 +203,7 @@ def show_debug_logs():
         
         with col2:
             manual_source = st.text_input("Source", placeholder="Component/module name")
-            manual_timestamp = st.datetime_input("Timestamp", value=datetime.now())
+            manual_timestamp = st.text_input("Timestamp", value=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         
         if st.form_submit_button("Add Log Entry"):
             if manual_message:

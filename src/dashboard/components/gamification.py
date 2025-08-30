@@ -12,13 +12,34 @@ from datetime import datetime, timedelta
 import numpy as np
 
 def load_gamification_data():
-    """Load data for gamification features"""
+    """Load data for gamification features through the service layer"""
     try:
-        df = pd.read_csv("data/attendance.csv")
+        # Get attendance service from session state
+        if 'attendance_service' not in st.session_state:
+            return None, "Services not initialized. Please refresh the page."
+        
+        attendance_service = st.session_state.attendance_service
+        
+        # Get attendance data through service layer
+        attendance_data = attendance_service.get_attendance_report_by_type("detailed_history")
+        
+        if not attendance_data or 'attendance_data' not in attendance_data:
+            return None, "No attendance data available yet."
+        
+        # Extract the actual attendance data from the report
+        actual_data = attendance_data['attendance_data']
+        
+        if not actual_data or len(actual_data) == 0:
+            return None, "No attendance data available yet."
+        
+        # Convert to DataFrame for easier manipulation
+        df = pd.DataFrame(actual_data)
+        
+        # Filter out test entries
         df = df[~df['Name'].str.startswith('#', na=False)]
         
         if len(df) == 0:
-            return None, "No attendance data available yet."
+            return None, "No valid attendance data available."
         
         # Convert date and time columns
         df['Date'] = pd.to_datetime(df['Date'], errors='coerce')

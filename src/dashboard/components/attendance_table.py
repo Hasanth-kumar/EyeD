@@ -1,6 +1,7 @@
 """
-Enhanced Attendance Table Component - Day 11 Implementation
+Enhanced Attendance Table Component - Phase 4 Implementation
 Provides advanced filtering, search, and table view for attendance data
+Uses service layer for data access and business logic
 """
 
 import streamlit as st
@@ -10,16 +11,34 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 def load_attendance_data():
-    """Load and preprocess attendance data"""
+    """Load attendance data through the service layer"""
     try:
-        # Load attendance data
-        df = pd.read_csv("data/attendance.csv")
+        # Get attendance service from session state
+        if 'attendance_service' not in st.session_state:
+            return None, "Services not initialized. Please refresh the page."
         
-        # Remove comment rows
-        df = df[~df['Name'].str.startswith('#', na=False)]
+        attendance_service = st.session_state.attendance_service
         
-        if len(df) == 0:
+        # Get attendance history through service
+        attendance_data = attendance_service.get_attendance_report_by_type("detailed_history")
+        
+        if not attendance_data or 'attendance_data' not in attendance_data:
             return None, "No attendance data available yet. Start using the system to see logs."
+        
+        # Extract the actual attendance data from the report
+        actual_data = attendance_data['attendance_data']
+        
+        if not actual_data or len(actual_data) == 0:
+            return None, "No attendance data available yet. Start using the system to see logs."
+        
+        # Convert to DataFrame for easier manipulation
+        df = pd.DataFrame(actual_data)
+        
+        # Ensure required columns exist
+        required_columns = ['Date', 'Time', 'Name', 'ID', 'Status', 'Confidence']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            return None, f"Missing required columns: {missing_columns}"
         
         # Convert date and time columns
         df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
@@ -67,14 +86,25 @@ def categorize_confidence(confidence):
 
 def show_attendance_table():
     """Show enhanced attendance table with advanced filtering and search"""
-    st.header("📋 Enhanced Attendance Table - Day 11")
-    st.markdown("**Advanced filtering, search, and analysis capabilities**")
+    st.header("📋 Enhanced Attendance Table - Phase 4")
+    st.markdown("**Service Layer Architecture with Advanced Filtering**")
     
-    # Load data
+    # Architecture info
+    st.info("""
+    🏗️ **New Architecture**: This component now uses the service layer instead of direct file access.
+    - **Service Layer**: Business logic orchestration
+    - **Repository Layer**: Data persistence
+    - **Clean Separation**: UI components depend on services, not data directly
+    """)
+    
+    # Load data through service layer
     df, error = load_attendance_data()
     if error:
         st.error(error)
-        st.info("Make sure the attendance.csv file exists and has the correct format.")
+        if "Services not initialized" in error:
+            st.info("Please refresh the page to initialize services.")
+        else:
+            st.info("Make sure the attendance data is available through the service layer.")
         return
     
     # Advanced filtering section
