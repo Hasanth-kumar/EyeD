@@ -14,6 +14,37 @@ from pathlib import Path
 import threading
 import queue
 
+# Page configuration
+st.set_page_config(
+    page_title="Daily Attendance - EyeD",
+    page_icon="📅",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Set current page in session state for navigation highlighting
+st.session_state.current_page = "daily_attendance"
+
+# Hide the top navigation bar
+st.markdown("""
+<style>
+    /* Hide the top navigation bar completely */
+    .stApp > header {
+        display: none !important;
+    }
+    
+    /* Hide the hamburger menu button */
+    .stApp > div[data-testid="stToolbar"] {
+        display: none !important;
+    }
+    
+    /* Professional spacing */
+    .stApp > div[data-testid="stAppViewContainer"] {
+        padding-top: 1rem !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 def initialize_systems():
     """Initialize face recognition, liveness detection, and attendance systems"""
     try:
@@ -963,6 +994,62 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Hide the top navigation bar
+st.markdown("""
+<style>
+    /* Professional top navigation bar styling */
+    .stApp > header {
+        background: linear-gradient(90deg, #1f77b4, #17a2b8) !important;
+        border-bottom: 2px solid #0d6efd !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+    }
+    
+    /* Style the hamburger menu button */
+    .stApp > div[data-testid="stToolbar"] {
+        background: transparent !important;
+    }
+    
+    /* Style the header content */
+    .stApp > header > div {
+        background: transparent !important;
+    }
+    
+    /* Professional header text */
+    .stApp > header h1 {
+        color: white !important;
+        font-weight: bold !important;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.3) !important;
+    }
+    
+    /* Style the hamburger menu icon */
+    .stApp > div[data-testid="stToolbar"] button {
+        color: white !important;
+        background: rgba(255,255,255,0.1) !important;
+        border: 1px solid rgba(255,255,255,0.2) !important;
+        border-radius: 6px !important;
+    }
+    
+    /* Hover effects for buttons */
+    .stApp > div[data-testid="stToolbar"] button:hover {
+        background: rgba(255,255,255,0.2) !important;
+        transform: translateY(-1px) !important;
+        transition: all 0.2s ease !important;
+    }
+    
+    /* Professional spacing */
+    .stApp > div[data-testid="stAppViewContainer"] {
+        padding-top: 1rem !important;
+    }
+    
+    /* Add subtle shadow to main content */
+    .main .block-container {
+        box-shadow: 0 0 10px rgba(0,0,0,0.05) !important;
+        border-radius: 8px !important;
+        margin-top: 1rem !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Initialize services if not already done
 def initialize_services():

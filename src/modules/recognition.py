@@ -149,18 +149,22 @@ class FaceRecognition(RecognitionInterface):
             return DetectionResult([], [])
     
     def recognize_face(self, face_image: np.ndarray, 
-                      confidence_threshold: float = 0.6) -> Optional[RecognitionResult]:
+                      confidence_threshold: float = None) -> Optional[RecognitionResult]:
         """
         Recognize a face from the database
         
         Args:
             face_image: Face image to recognize
-            confidence_threshold: Minimum confidence for recognition
+            confidence_threshold: Minimum confidence for recognition (uses instance threshold if None)
             
         Returns:
             RecognitionResult if face is recognized, None otherwise
         """
         start_time = time.time()
+        
+        # Use instance threshold if none provided
+        if confidence_threshold is None:
+            confidence_threshold = self.confidence_threshold
         
         try:
             # Extract embeddings from the face image
@@ -174,17 +178,24 @@ class FaceRecognition(RecognitionInterface):
             best_user_id = None
             best_user_name = None
             
+            logger.info(f"Comparing with {len(self.known_faces)} known faces")
+            
             for user_id, known_embeddings in self.known_faces.items():
                 confidence = self.compare_faces(embeddings, known_embeddings)
+                user_name = self.known_names.get(user_id, "Unknown")
+                logger.info(f"Comparing with {user_name}: confidence = {confidence:.3f}")
                 
                 if confidence > best_confidence and confidence >= confidence_threshold:
                     best_confidence = confidence
                     best_user_id = user_id
-                    best_user_name = self.known_names.get(user_id, "Unknown")
+                    best_user_name = user_name
+                    logger.info(f"New best match: {user_name} with confidence {confidence:.3f}")
             
-            if best_match:
+            if best_user_id:  # Check if we found a match
                 processing_time = (time.time() - start_time) * 1000
                 self.recognition_counts += 1
+                
+                logger.info(f"✅ Face recognized: {best_user_name} with confidence {best_confidence:.3f}")
                 
                 return RecognitionResult(
                     user_id=best_user_id,
@@ -193,6 +204,9 @@ class FaceRecognition(RecognitionInterface):
                     face_location=(0, 0, face_image.shape[1], face_image.shape[0]),
                     processing_time_ms=processing_time
                 )
+            else:
+                logger.warning(f"No face recognized above threshold {confidence_threshold}")
+                logger.info(f"Best confidence found: {best_confidence:.3f}")
             
             return None
             
@@ -211,20 +225,29 @@ class FaceRecognition(RecognitionInterface):
             Face embeddings as numpy array or None if extraction failed
         """
         try:
+            # Log original image info
+            logger.info(f"Original image shape: {face_image.shape}, dtype: {face_image.dtype}")
+            logger.info(f"Original image range: [{face_image.min()}, {face_image.max()}]")
+            
             # Preprocess image for better embedding extraction
             processed_image = self.preprocess_image(face_image)
             
-            # Use DeepFace to extract embeddings
+            # Log processed image info
+            logger.info(f"Processed image shape: {processed_image.shape}, dtype: {processed_image.dtype}")
+            logger.info(f"Processed image range: [{processed_image.min()}, {processed_image.max()}]")
+            
+            # Use DeepFace to extract embeddings - use VGG-Face to match registration
             embedding_result = DeepFace.represent(
                 img_path=processed_image,
-                model_name="Facenet512",
+                model_name="VGG-Face",
                 enforce_detection=False,
                 align=True
             )
             
             if embedding_result and len(embedding_result) > 0:
                 embeddings = np.array(embedding_result[0]["embedding"])
-                logger.debug(f"Extracted embeddings with {len(embeddings)} dimensions")
+                logger.info(f"Extracted embeddings with {len(embeddings)} dimensions using VGG-Face model")
+                logger.info(f"Embedding range: [{embeddings.min():.4f}, {embeddings.max():.4f}]")
                 return embeddings
             else:
                 logger.warning("DeepFace failed to extract embeddings")
@@ -250,12 +273,21 @@ class FaceRecognition(RecognitionInterface):
             emb1 = np.array(face1).flatten()
             emb2 = np.array(face2).flatten()
             
+            # Log embedding dimensions for debugging
+            logger.info(f"Comparing embeddings: emb1 shape={emb1.shape}, emb2 shape={emb2.shape}")
+            
+            # Check if dimensions match
+            if emb1.shape != emb2.shape:
+                logger.error(f"Embedding dimension mismatch: {emb1.shape} vs {emb2.shape}")
+                return 0.0
+            
             # Calculate cosine similarity
             dot_product = np.dot(emb1, emb2)
             norm1 = np.linalg.norm(emb1)
             norm2 = np.linalg.norm(emb2)
             
             if norm1 == 0 or norm2 == 0:
+                logger.warning("Zero norm detected in embeddings")
                 return 0.0
             
             similarity = dot_product / (norm1 * norm2)
@@ -272,16 +304,107 @@ class FaceRecognition(RecognitionInterface):
         Load known faces from database
         
         Args:
-            faces_db_path: Path to faces database
+            faces_db_path: Path to faces database directory
             
         Returns:
-            True if loaded successfully, False otherwise
+            True if faces loaded successfully, False otherwise
         """
         try:
-            # This method would typically load from a face database
-            # For now, we'll assume the faces are already loaded via add_known_face
-            logger.info("Known faces loading method called - faces should be added individually")
-            return True
+            import json
+            from pathlib import Path
+            
+            faces_dir = Path(faces_db_path)
+            faces_json = faces_dir / "faces.json"
+            
+            if not faces_json.exists():
+                logger.warning(f"Faces database not found at {faces_json}")
+                return False
+            
+            # Load faces database
+            with open(faces_json, 'r') as f:
+                faces_db = json.load(f)
+            
+            # Clear existing faces
+            self.known_faces.clear()
+            self.known_names.clear()
+            
+            # Handle nested structure (users object) or flat structure
+            users_data = faces_db.get("users", faces_db)
+            logger.info(f"Processing users data with {len(users_data)} items")
+            logger.info(f"Users data keys: {list(users_data.keys())}")
+            
+            # If users object is empty, fall back to root level
+            if not users_data:
+                users_data = {k: v for k, v in faces_db.items() if k not in ["users", "metadata"]}
+                logger.info(f"Falling back to root level with {len(users_data)} items")
+                logger.info(f"Root level keys: {list(users_data.keys())}")
+            
+            # Load each user's face data
+            for user_id, user_data in users_data.items():
+                try:
+                    # Skip metadata fields
+                    if user_id in ["embeddings", "metadata"]:
+                        continue
+                    
+                    # Extract face embedding - handle different field names and prioritize correct dimensions
+                    embedding = None
+                    embedding_source = None
+                    
+                    # First try to find embeddings with correct dimensions (4096 for VGG-Face)
+                    if 'embeddings' in user_data:
+                        embeddings_list = user_data['embeddings']
+                        if isinstance(embeddings_list, list) and len(embeddings_list) > 100:
+                            # Check if it's not all the same value (placeholder)
+                            if len(set(embeddings_list)) > 10:
+                                embedding = np.array(embeddings_list)
+                                embedding_source = 'embeddings'
+                                logger.info(f"Found valid embeddings in 'embeddings' field: {len(embeddings_list)} dimensions")
+                    
+                    # If no valid embeddings found, try the 'embedding' field
+                    if embedding is None and 'embedding' in user_data:
+                        embedding_list = user_data['embedding']
+                        if isinstance(embedding_list, list) and len(embedding_list) > 100:
+                            # Check if it's not all the same value (placeholder)
+                            unique_values = len(set(embedding_list))
+                            logger.info(f"User {user_id}: embedding has {unique_values} unique values out of {len(embedding_list)} total values")
+                            if unique_values > 10:
+                                embedding = np.array(embedding_list)
+                                embedding_source = 'embedding'
+                                logger.info(f"Found valid embeddings in 'embedding' field: {len(embedding_list)} dimensions")
+                            else:
+                                logger.warning(f"User {user_id}: embeddings rejected - only {unique_values} unique values (need > 10)")
+                    
+                    if embedding is not None:
+                        # Verify embedding dimensions
+                        if len(embedding) == 4096:
+                            logger.info(f"✅ Valid VGG-Face embeddings: {len(embedding)} dimensions")
+                        elif len(embedding) == 128:
+                            logger.warning(f"⚠️ 128-dimensional embeddings detected - these may be from a different model")
+                        else:
+                            logger.warning(f"⚠️ Unexpected embedding dimensions: {len(embedding)}")
+                        
+                        # Store face data
+                        self.known_faces[user_id] = embedding
+                        
+                        # Get display name - handle different field names
+                        display_name = user_id  # Default to user_id
+                        if 'name' in user_data:
+                            display_name = user_data['name']
+                        elif 'first_name' in user_data and 'last_name' in user_data:
+                            display_name = f"{user_data['first_name']} {user_data['last_name']}"
+                        
+                        self.known_names[user_id] = display_name
+                        
+                        logger.info(f"Loaded face for user: {display_name} (ID: {user_id}) from {embedding_source} field")
+                    else:
+                        logger.warning(f"No valid embedding found for user: {user_id}")
+                        
+                except Exception as e:
+                    logger.error(f"Failed to load face for user {user_id}: {e}")
+                    continue
+            
+            logger.info(f"Successfully loaded {len(self.known_faces)} known faces")
+            return len(self.known_faces) > 0
             
         except Exception as e:
             logger.error(f"Failed to load known faces: {e}")
@@ -373,12 +496,12 @@ class FaceRecognition(RecognitionInterface):
                 # Grayscale to RGB
                 processed = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
             
-            # Resize to standard size for better recognition
-            target_size = (160, 160)  # Facenet512 standard size
+            # VGG-Face expects 224x224 images
+            target_size = (224, 224)
             processed = cv2.resize(processed, target_size)
             
-            # Normalize pixel values
-            processed = processed.astype(np.float32) / 255.0
+            # VGG-Face expects pixel values in range [0, 255], not normalized
+            processed = processed.astype(np.uint8)
             
             return processed
             
@@ -596,3 +719,60 @@ class FaceRecognition(RecognitionInterface):
         except Exception as e:
             logger.error(f"OpenCV detection failed: {e}")
             return None
+
+    def recognize_user(self, frame: np.ndarray) -> List[Dict[str, Any]]:
+        """
+        Main method for real-time user recognition from video frame
+        
+        Args:
+            frame: Video frame as numpy array
+            
+        Returns:
+            List of recognition results with bbox, name, confidence, and recognized status
+        """
+        try:
+            # Step 1: Detect faces in the frame
+            detection_result = self.detect_faces(frame)
+            
+            # Check if faces were detected
+            if not detection_result.face_locations:
+                return []
+            
+            results = []
+            
+            # Step 2: Process each detected face
+            for i, face_location in enumerate(detection_result.face_locations):
+                x, y, w, h = face_location
+                
+                # Extract face region
+                face_region = frame[y:y+h, x:x+w]
+                
+                # Step 3: Recognize the face
+                recognition_result = self.recognize_face(face_region)
+                
+                if recognition_result:
+                    # Face recognized
+                    results.append({
+                        'bbox': (x, y, w, h),
+                        'name': recognition_result.user_name,
+                        'confidence': recognition_result.confidence,
+                        'recognized': True,
+                        'user_id': recognition_result.user_id,
+                        'processing_time': recognition_result.processing_time_ms
+                    })
+                else:
+                    # Face detected but not recognized
+                    results.append({
+                        'bbox': (x, y, w, h),
+                        'name': 'Unknown',
+                        'confidence': 0.0,
+                        'recognized': False,
+                        'user_id': None,
+                        'processing_time': 0.0
+                    })
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"User recognition failed: {e}")
+            return []

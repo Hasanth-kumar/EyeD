@@ -1,6 +1,6 @@
 """
-Dashboard Overview Component - Phase 4 Implementation
-Provides comprehensive dashboard overview using service layer architecture
+Dashboard Overview Component
+Provides comprehensive dashboard overview
 """
 
 import streamlit as st
@@ -34,17 +34,6 @@ def get_overview_data():
 
 def show_dashboard():
     """Show comprehensive dashboard overview"""
-    st.header("📊 Dashboard Overview - Phase 4")
-    st.markdown("**Service Layer Architecture with Real-time Insights**")
-    
-    # Architecture info
-    st.info("""
-    🏗️ **New Architecture**: Dashboard overview now uses the service layer for all data access.
-    - **Service Layer**: Orchestrates data retrieval and business logic
-    - **Repository Layer**: Provides clean data access
-    - **Real-time Updates**: Live data through service methods
-    """)
-    
     # Get overview data through service layer
     overview_data, error = get_overview_data()
     if error:
@@ -53,29 +42,37 @@ def show_dashboard():
             st.info("Please refresh the page to initialize services.")
         return
     
+    # Welcome section
+    st.markdown("""
+    ### 🎯 System Overview
+    
+    Welcome to the EyeD AI Attendance System dashboard. This comprehensive overview provides 
+    real-time insights into your attendance management system performance and status.
+    """)
+    
     # Key metrics row
-    st.subheader("🎯 Key Performance Indicators")
+    st.subheader("📊 Key Performance Indicators")
     
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         if overview_data.get('attendance_summary'):
             total_attendance = overview_data['attendance_summary'].get('total_attendance', 0)
-            st.metric("Total Attendance", total_attendance)
+            st.metric("Total Attendance", total_attendance, help="All-time attendance records")
     
     with col2:
         if overview_data.get('user_count'):
-            st.metric("Registered Users", overview_data['user_count'])
+            st.metric("Registered Users", overview_data['user_count'], help="Total registered users in system")
     
     with col3:
         if overview_data.get('attendance_summary'):
             today_count = overview_data['attendance_summary'].get('today_attendance', 0)
-            st.metric("Today's Attendance", today_count)
+            st.metric("Today's Attendance", today_count, help="Attendance count for today")
     
     with col4:
         if overview_data.get('system_health'):
             health_status = "🟢 Healthy" if overview_data['system_health'] else "🔴 Issues"
-            st.metric("System Health", health_status)
+            st.metric("System Health", health_status, help="Overall system operational status")
     
     # System status
     st.subheader("🏥 System Status")
@@ -84,7 +81,7 @@ def show_dashboard():
     
     with col1:
         # Service health status
-        st.write("**Service Layer Status**")
+        st.write("**Service Status**")
         
         if overview_data.get('system_health'):
             st.success("✅ All services operational")
@@ -163,79 +160,23 @@ def show_dashboard():
                         )
                         st.plotly_chart(fig, use_container_width=True)
     
-    # Quick actions
-    st.subheader("⚡ Quick Actions")
+    # Quick navigation section - removed duplicate navigation buttons
+    st.subheader("🚀 Quick Access")
+    st.markdown("**Access all features through the page navigation:**")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        if st.button("🔄 Refresh Data"):
-            st.rerun()
+        st.info("📋 **Attendance**\n\nView and manage attendance records")
     
     with col2:
-        if st.button("📊 Export Report"):
-            try:
-                if 'attendance_service' in st.session_state:
-                    attendance_service = st.session_state.attendance_service
-                    
-                    export_result = attendance_service.export_attendance_data(
-                        export_type="overview_report",
-                        format="csv"
-                    )
-                    
-                    if export_result.get('success'):
-                        st.success("✅ Report exported successfully!")
-                        st.download_button(
-                            label="📥 Download",
-                            data=export_result.get('data', ''),
-                            file_name=f"overview_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                            mime="text/csv"
-                        )
-                    else:
-                        st.error(f"Export failed: {export_result.get('error', 'Unknown error')}")
-                else:
-                    st.error("Services not available")
-            except Exception as e:
-                st.error(f"Export error: {e}")
+        st.info("👤 **Registration**\n\nAdd new users to the system")
     
     with col3:
-        if st.button("🔍 System Check"):
-            try:
-                if 'attendance_service' in st.session_state:
-                    attendance_service = st.session_state.attendance_service
-                    
-                    health_result = attendance_service.is_system_healthy()
-                    
-                    if health_result:
-                        st.success("✅ System health check passed")
-                    else:
-                        st.error("❌ System health check failed")
-                else:
-                    st.error("Services not available")
-            except Exception as e:
-                st.error(f"Health check error: {e}")
+        st.info("📈 **Analytics**\n\nView insights and trends")
     
-    # Architecture benefits
-    st.subheader("🏗️ Architecture Benefits")
+    with col4:
+        st.info("🎮 **Gamification**\n\nUser engagement features")
     
-    st.success("""
-    **Phase 4 Achievements:**
-    - ✅ **Service Layer**: All data access goes through services
-    - ✅ **Repository Layer**: Clean data persistence
-    - ✅ **Dependency Injection**: Components depend on interfaces
-    - ✅ **Single Responsibility**: Each layer has one clear purpose
-    - ✅ **Real-time Data**: Live updates through service methods
-    - ✅ **Error Handling**: Centralized error handling in services
-    """)
-    
-    # Next steps
-    st.subheader("🚀 Next Steps")
-    
-    st.info("""
-    **Ready for Phase 5:**
-    - Comprehensive unit testing
-    - Performance optimization
-    - Advanced analytics
-    - User experience improvements
-    """)
+    # Note: All actions are available through the page navigation and individual pages
 

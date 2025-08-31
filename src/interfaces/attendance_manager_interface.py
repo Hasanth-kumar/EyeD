@@ -66,7 +66,9 @@ class AttendanceManagerInterface(ABC):
     
     @abstractmethod
     def log_attendance(self, face_image: np.ndarray, user_id: Optional[str] = None,
-                      device_info: str = "", location: str = "") -> Optional[AttendanceEntry]:
+                      device_info: str = "", location: str = "", 
+                      confidence: float = 0.0, liveness_verified: bool = False,
+                      face_quality_score: float = 0.0, verification_stage: str = "initial") -> Optional[AttendanceEntry]:
         """
         Log attendance for a detected face
         
@@ -75,6 +77,10 @@ class AttendanceManagerInterface(ABC):
             user_id: Optional user ID if known
             device_info: Information about the device used
             location: Location where attendance was logged
+            confidence: Face recognition confidence score
+            liveness_verified: Whether liveness verification passed
+            face_quality_score: Face image quality score
+            verification_stage: Stage of verification process
             
         Returns:
             AttendanceEntry if successful, None otherwise

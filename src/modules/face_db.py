@@ -588,5 +588,28 @@ class FaceDatabase(FaceDatabaseInterface):
         except Exception as e:
             logger.error(f"Error calculating similarity: {e}")
             return 0.0
+    
+    def list_faces(self) -> List[Dict[str, Any]]:
+        """
+        List all faces in the database
+        
+        Returns:
+            List of face data dictionaries
+        """
+        try:
+            users = []
+            for user_id, data in self.users_db.items():
+                if isinstance(data, dict) and "user_name" in data:
+                    users.append({
+                        "user_id": user_id,
+                        "name": data.get("user_name", "Unknown"),
+                        "registration_date": data.get("created_at", "Unknown"),
+                        "image_path": data.get("image_path", "Unknown"),
+                        "has_embedding": user_id in self.user_embeddings
+                    })
+            return users
+        except Exception as e:
+            logger.error(f"Failed to list faces: {e}")
+            return []
 
 

@@ -12,7 +12,6 @@ from pathlib import Path
 
 def show_debug():
     """Show debug tools and performance monitoring"""
-    st.header("🐛 Debug Tools & Performance Monitoring")
     st.markdown("**System diagnostics, performance metrics, and debug logging**")
     
     # Debug tabs
@@ -82,7 +81,7 @@ def show_performance_metrics():
         test_iterations = st.slider("Iterations", 1, 50, 5)
     
     with col3:
-        if st.button("🚀 Run Performance Test"):
+        if st.button("🚀 Run Performance Test", key="debug_performance_test_btn"):
             run_performance_benchmark(test_operation, test_iterations)
     
     # Performance charts
@@ -153,16 +152,16 @@ def show_performance_metrics():
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("🗑️ Clear Metrics"):
+        if st.button("🗑️ Clear Metrics", key="debug_clear_metrics_btn"):
             st.session_state.performance_metrics = []
             st.rerun()
     
     with col2:
-        if st.button("📤 Export Metrics"):
+        if st.button("📤 Export Metrics", key="debug_export_metrics_btn"):
             export_performance_metrics()
     
     with col3:
-        if st.button("🔄 Refresh"):
+        if st.button("🔄 Refresh", key="debug_refresh_btn"):
             st.rerun()
 
 def show_debug_logs():
@@ -183,11 +182,11 @@ def show_debug_logs():
         )
     
     with col2:
-        if st.button("📝 Add Test Log"):
+        if st.button("📝 Add Test Log", key="debug_add_log_btn"):
             add_test_log_entry()
     
     with col3:
-        if st.button("🗑️ Clear Logs"):
+        if st.button("🗑️ Clear Logs", key="debug_clear_logs_btn"):
             st.session_state.debug_logs = []
             st.rerun()
     
@@ -259,7 +258,7 @@ def show_debug_logs():
             st.metric("Warnings", warning_count)
         
         # Export logs
-        if st.button("📤 Export Logs"):
+        if st.button("📤 Export Logs", key="debug_export_logs_btn"):
             export_debug_logs(filtered_logs)
     
     else:

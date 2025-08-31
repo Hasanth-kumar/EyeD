@@ -12,6 +12,7 @@ import os
 import argparse
 from pathlib import Path
 import cv2
+from datetime import datetime
 
 # Add src directory to path for imports
 sys.path.append(str(Path(__file__).parent / "src"))
@@ -207,7 +208,7 @@ def main():
     elif args.mode == "register":
         print("📝 Starting user registration...")
         try:
-            from modules.registration import FaceRegistration
+            from src.modules.registration import FaceRegistration
             registration = FaceRegistration()
             
             print("\n🧩 Face Registration System")
@@ -216,37 +217,107 @@ def main():
             print("2. Register from image file")
             print("3. List registered users")
             print("4. Delete user")
-            print("5. Exit")
+            print("5. Show database stats")
+            print("6. Exit")
             
             while True:
-                choice = input("\nEnter your choice (1-5): ").strip()
+                choice = input("\nEnter your choice (1-6): ").strip()
                 
                 if choice == "1":
-                    name = input("Enter user name: ").strip()
-                    if name:
-                        success = registration.capture_face(name)
-                        if success:
-                            print(f"✅ User {name} registered successfully!")
-                        else:
-                            print(f"❌ Failed to register user {name}")
+                    username = input("Enter username: ").strip()
+                    if username:
+                        print(f"📸 Starting webcam capture for user: {username}")
+                        print("Position your face in the camera and press SPACE to capture")
+                        
+                        # Initialize webcam
+                        cap = cv2.VideoCapture(0)
+                        if not cap.isOpened():
+                            print("❌ Failed to open webcam")
+                            continue
+                        
+                        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                        
+                        try:
+                            while True:
+                                ret, frame = cap.read()
+                                if not ret:
+                                    continue
+                                
+                                # Flip frame for mirror effect
+                                frame = cv2.flip(frame, 1)
+                                
+                                # Display instructions
+                                cv2.putText(frame, f"User: {username}", (10, 30), 
+                                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                                cv2.putText(frame, "Press SPACE to capture, ESC to cancel", (10, 60), 
+                                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                                
+                                cv2.imshow("Face Registration", frame)
+                                
+                                key = cv2.waitKey(1) & 0xFF
+                                if key == 27:  # ESC
+                                    print("Registration cancelled")
+                                    break
+                                elif key == 32:  # SPACE
+                                    print("📸 Capturing face...")
+                                    
+                                    # Register user
+                                    result = registration.register_user(
+                                        username=username,
+                                        face_image=frame,
+                                        user_metadata={
+                                            'registration_method': 'webcam',
+                                            'capture_time': datetime.now().isoformat()
+                                        }
+                                    )
+                                    
+                                    if result['success']:
+                                        print(f"✅ User {username} registered successfully!")
+                                        print(f"📁 Image saved: {result['image_path']}")
+                                        print(f"🔢 Embeddings shape: {result['embeddings_shape']}")
+                                    else:
+                                        print(f"❌ Registration failed: {result['error']}")
+                                    
+                                    break
+                        
+                        finally:
+                            cap.release()
+                            cv2.destroyAllWindows()
                 
                 elif choice == "2":
                     image_path = input("Enter image file path: ").strip()
-                    name = input("Enter user name: ").strip()
-                    if image_path and name:
-                        success = registration.register_from_image(image_path, name)
-                        if success:
-                            print(f"✅ User {name} registered successfully from image!")
+                    username = input("Enter username: ").strip()
+                    if image_path and username:
+                        result = registration.register_user(
+                            username=username,
+                            face_image=image_path,
+                            user_metadata={
+                                'registration_method': 'image_upload',
+                                'source_image': image_path
+                            }
+                        )
+                        
+                        if result['success']:
+                            print(f"✅ User {username} registered successfully from image!")
+                            print(f"📁 Image saved: {result['image_path']}")
                         else:
-                            print(f"❌ Failed to register user {name} from image")
+                            print(f"❌ Registration failed: {result['error']}")
                 
                 elif choice == "3":
                     try:
-                        users = registration.get_registered_users()
+                        users = registration.get_all_users()
                         if users:
-                            print("\nRegistered Users:")
-                            for user_id, name in users.items():
-                                print(f"  {user_id}: {name}")
+                            print(f"\n📊 Registered Users ({len(users)} total):")
+                            print("-" * 50)
+                            for username, user_info in users.items():
+                                first_name = user_info.get('first_name', '')
+                                last_name = user_info.get('last_name', '')
+                                name = f"{first_name} {last_name}".strip() if first_name or last_name else username
+                                status = user_info.get('status', 'Unknown')
+                                reg_date = user_info.get('registration_date', 'Unknown')[:10]
+                                
+                                print(f"👤 {username:<20} | {name:<25} | {status:<10} | {reg_date}")
                         else:
                             print("No users registered yet.")
                     except Exception as e:
@@ -254,17 +325,30 @@ def main():
                 
                 elif choice == "4":
                     try:
-                        user_id = input("Enter user ID to delete: ").strip()
-                        if user_id:
-                            success = registration.delete_user(user_id)
+                        username = input("Enter username to delete: ").strip()
+                        if username:
+                            success = registration.delete_user(username)
                             if success:
-                                print(f"✅ User {user_id} deleted successfully!")
+                                print(f"✅ User {username} deleted successfully!")
                             else:
-                                print(f"❌ Failed to delete user {user_id}")
+                                print(f"❌ Failed to delete user {username}")
                     except Exception as e:
                         print(f"❌ Error deleting user: {e}")
                 
                 elif choice == "5":
+                    try:
+                        stats = registration.get_database_stats()
+                        print("\n📊 Database Statistics:")
+                        print("-" * 30)
+                        print(f"Total Users: {stats.get('total_users', 0)}")
+                        print(f"Active Users: {stats.get('active_users', 0)}")
+                        print(f"Database Version: {stats.get('version', 'Unknown')}")
+                        print(f"Created: {stats.get('database_created', 'Unknown')}")
+                        print(f"Last Updated: {stats.get('last_updated', 'Unknown')}")
+                    except Exception as e:
+                        print(f"❌ Error getting database stats: {e}")
+                
+                elif choice == "6":
                     print("👋 Returning to main menu...")
                     break
                 
@@ -303,7 +387,7 @@ def main():
                     print(f"✅ Face cascade loaded: {recognition.face_cascade is not None}")
                     
                     # Try to load known faces
-                    success = recognition.load_known_faces()
+                    success = recognition.load_known_faces("data/faces")
                     if success:
                         stats = recognition.get_recognition_stats()
                         print(f"✅ Loaded {stats['known_faces_count']} known faces")
@@ -324,10 +408,10 @@ def main():
                     
                     faces = recognition.detect_faces(test_image)
                     print(f"✅ Face detection test completed")
-                    print(f"✅ Detected faces: {len(faces)}")
+                    print(f"✅ Detected faces: {len(faces.face_locations)}")
                     
-                    if faces:
-                        for i, (x, y, w, h) in enumerate(faces):
+                    if faces.face_locations:
+                        for i, (x, y, w, h) in enumerate(faces.face_locations):
                             print(f"   - Face {i+1}: ({x}, {y}, {w}, {h})")
                 
                 elif choice == "3":
@@ -335,7 +419,7 @@ def main():
                     recognition = FaceRecognition()
                     
                     # Check if there are any registered faces
-                    success = recognition.load_known_faces()
+                    success = recognition.load_known_faces("data/faces")
                     if not success:
                         print("⚠️ No known faces to test with. Please register some users first.")
                         continue
@@ -392,7 +476,7 @@ def main():
                     recognition = FaceRecognition()
                     
                     # Load known faces
-                    success = recognition.load_known_faces()
+                    success = recognition.load_known_faces("data/faces")
                     if not success:
                         print("⚠️ No known faces to test with. Please register some users first.")
                         continue
@@ -415,7 +499,7 @@ def main():
                     recognition = FaceRecognition()
                     
                     # Check if there are any registered faces
-                    success = recognition.load_known_faces()
+                    success = recognition.load_known_faces("data/faces")
                     if not success:
                         print("⚠️ No known faces to test with. Please register some users first.")
                         continue
@@ -1075,13 +1159,14 @@ def main():
             while True:
                 print("\n🎯 Available Actions:")
                 print("1. Start Attendance Session")
-                print("2. Process Attendance Frame")
-                print("3. View Attendance Analytics")
-                print("4. Generate Transparency Report")
-                print("5. View Performance Statistics")
-                print("6. Update Configuration")
-                print("7. Run Test Suite")
-                print("8. Exit")
+                print("2. Liveness Verification & Attendance Logging")
+                print("3. Continuous Real-Time Attendance")
+                print("4. View Attendance Analytics")
+                print("5. Generate Transparency Report")
+                print("6. View Performance Statistics")
+                print("7. Update Configuration")
+                print("8. Run Test Suite")
+                print("9. Exit")
                 
                 choice = input("\nEnter your choice (1-8): ").strip()
                 
@@ -1093,7 +1178,7 @@ def main():
                     location = input("Enter location (or press Enter for default): ").strip() or "Office"
                     
                     if user_id and user_name:
-                        session_id = attendance_manager.start_attendance_session(
+                        session_id = attendance_manager.start_session(
                             user_id=user_id,
                             user_name=user_name,
                             device_info=device_info,
@@ -1104,14 +1189,29 @@ def main():
                         print("❌ User ID and name are required")
                 
                 elif choice == "2":
-                    print("\n🔍 Processing attendance frame...")
+                    print("\n🔍 Liveness Verification & Attendance Logging...")
                     session_id = input("Enter session ID: ").strip()
                     
                     if not session_id:
                         print("❌ Session ID is required")
                         continue
                     
-                    # Initialize webcam for frame capture
+                    # Check if session exists
+                    active_sessions = attendance_manager.get_active_sessions()
+                    session = None
+                    for s in active_sessions:
+                        if s.session_id == session_id:
+                            session = s
+                            break
+                    
+                    if not session:
+                        print("❌ Session not found or expired")
+                        continue
+                    
+                    print(f"✅ Session found: {session.user_name} ({session.user_id})")
+                    print("🎯 Starting liveness verification...")
+                    
+                    # Initialize webcam for liveness check
                     cap = cv2.VideoCapture(0)
                     if not cap.isOpened():
                         print("❌ Failed to open webcam")
@@ -1120,7 +1220,7 @@ def main():
                     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
                     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
                     
-                    print("✅ Webcam ready! Press 'c' to capture frame, 'q' to quit")
+                    print("✅ Webcam ready! Position your face and press 'v' to verify liveness, 'q' to quit")
                     
                     try:
                         while True:
@@ -1130,25 +1230,50 @@ def main():
                             
                             frame = cv2.flip(frame, 1)  # Mirror effect
                             
-                            # Display frame
-                            cv2.imshow("EyeD - Attendance Frame Capture", frame)
+                            # Display frame with instructions
+                            cv2.putText(frame, "Press 'v' to verify liveness", (10, 30), 
+                                       cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                            cv2.putText(frame, f"Session: {session.user_name}", (10, 60), 
+                                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                            
+                            cv2.imshow("EyeD - Liveness Verification", frame)
                             
                             key = cv2.waitKey(1) & 0xFF
                             if key == ord('q'):
                                 break
-                            elif key == ord('c'):
-                                print("📷 Capturing frame for attendance verification...")
-                                result = attendance_manager.process_attendance_frame(frame, session_id)
+                            elif key == ord('v'):
+                                print("🔍 Verifying liveness and logging attendance...")
                                 
-                                if result['success']:
-                                    print("✅ Frame processed successfully!")
-                                    print(f"   User: {result.get('user_name', 'Unknown')}")
-                                    print(f"   Confidence: {result.get('confidence', 0.0):.3f}")
-                                    print(f"   Liveness Verified: {result.get('liveness_verified', False)}")
-                                    print(f"   Attendance Logged: {result.get('attendance_logged', False)}")
+                                # Use the existing verify_attendance method
+                                success, confidence, details = attendance_manager.verify_attendance(frame, session.user_id)
+                                
+                                if success:
+                                    print("✅ Liveness verification successful!")
+                                    print(f"   Confidence: {confidence:.3f}")
+                                    print(f"   Details: {details}")
+                                    
+                                                                    # Log attendance with verification results
+                                entry = attendance_manager.log_attendance(
+                                    face_image=frame,
+                                    user_id=session.user_id,
+                                    device_info=session.device_info,
+                                    location=session.location,
+                                    confidence=confidence,
+                                    liveness_verified=True,  # If we reach here, liveness passed
+                                    face_quality_score=details.get('face_quality_score', 0.0),
+                                    verification_stage=details.get('verification_stage', 'completed')
+                                )
+                                    
+                                    if entry:
+                                        print("✅ Attendance logged successfully!")
+                                        print(f"   User: {entry.name}")
+                                        print(f"   Time: {entry.time}")
+                                        print(f"   Status: {entry.status}")
+                                    else:
+                                        print("❌ Failed to log attendance")
                                 else:
-                                    print("❌ Frame processing failed!")
-                                    print(f"   Error: {result.get('error', 'Unknown error')}")
+                                    print("❌ Liveness verification failed!")
+                                    print(f"   Details: {details}")
                                 
                                 break
                     finally:
@@ -1156,6 +1281,122 @@ def main():
                         cv2.destroyAllWindows()
                 
                 elif choice == "3":
+                    print("\n🎬 Continuous Real-Time Attendance...")
+                    print("This mode will continuously monitor for faces and automatically log attendance")
+                    print("Press 'q' to quit, 'r' to reset")
+                    
+                    # Initialize webcam
+                    cap = cv2.VideoCapture(0)
+                    if not cap.isOpened():
+                        print("❌ Failed to open webcam")
+                        continue
+                    
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 480)
+                    
+                    print("✅ Webcam ready! Position your face for automatic attendance logging")
+                    print("🔍 System will continuously detect faces and log attendance")
+                    
+                    try:
+                        while True:
+                            ret, frame = cap.read()
+                            if not ret:
+                                break
+                            
+                            frame = cv2.flip(frame, 1)  # Mirror effect
+                            
+                            # Import required modules for real-time processing
+                            from src.modules.recognition import FaceRecognition
+                            from src.modules.liveness_detection import LivenessDetection
+                            
+                            # Initialize systems
+                            face_recognition = FaceRecognition()
+                            liveness_detection = LivenessDetection()
+                            
+                            # Step 1: Face Detection
+                            faces = face_recognition.detect_faces(frame)
+                            
+                            if len(faces) > 0:
+                                # Step 2: Face Recognition
+                                recognition_result = face_recognition.recognize_face(frame)
+                                
+                                if recognition_result:
+                                    user_name = recognition_result.user_name
+                                    confidence = recognition_result.confidence
+                                    
+                                    # Step 3: Liveness Detection
+                                    liveness_result = liveness_detection.detect_blink(frame)
+                                    
+                                    if liveness_result and liveness_result.is_live:
+                                        # Step 4: Log Attendance
+                                        print(f"✅ **ATTENDANCE LOGGED**: {user_name}")
+                                        print(f"   Confidence: {confidence:.3f}")
+                                        print(f"   Liveness: ✅ Verified")
+                                        print(f"   Time: {datetime.now().strftime('%H:%M:%S')}")
+                                        
+                                        # Log attendance with proper data
+                                        entry = attendance_manager.log_attendance(
+                                            face_image=frame,
+                                            user_id=recognition_result.user_id,
+                                            device_info="Real-Time Webcam",
+                                            location="Main Office",
+                                            confidence=confidence,
+                                            liveness_verified=True,
+                                            face_quality_score=liveness_result.face_quality_score if hasattr(liveness_result, 'face_quality_score') else 0.0,
+                                            verification_stage="completed"
+                                        )
+                                        
+                                        if entry:
+                                            print("✅ Attendance saved to database!")
+                                        else:
+                                            print("❌ Failed to save attendance")
+                                        
+                                        # Show success on frame
+                                        cv2.putText(frame, f"ATTENDANCE LOGGED: {user_name}", (10, 30), 
+                                                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                                        cv2.putText(frame, f"Confidence: {confidence:.3f}", (10, 60), 
+                                                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+                                        cv2.putText(frame, "Press 'q' to quit", (10, 90), 
+                                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                                    else:
+                                        # Show liveness status
+                                        cv2.putText(frame, f"Face: {user_name} (Conf: {confidence:.3f})", (10, 30), 
+                                                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                                        cv2.putText(frame, "Waiting for liveness verification...", (10, 60), 
+                                                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                                        cv2.putText(frame, "Blink naturally to verify", (10, 90), 
+                                                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                                else:
+                                    # Show recognition status
+                                    cv2.putText(frame, "Face detected - Processing recognition...", (10, 30), 
+                                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 0), 2)
+                            else:
+                                # Show detection status
+                                cv2.putText(frame, "Position your face in the camera", (10, 30), 
+                                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                                cv2.putText(frame, "Looking for faces...", (10, 60), 
+                                           cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
+                                cv2.putText(frame, "Press 'q' to quit", (10, 90), 
+                                           cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                            
+                            # Display frame
+                            cv2.imshow("EyeD - Continuous Attendance", frame)
+                            
+                            # Handle key presses
+                            key = cv2.waitKey(1) & 0xFF
+                            if key == ord('q'):
+                                break
+                            elif key == ord('r'):
+                                print("🔄 Resetting session...")
+                                # Clear any previous attendance logs for this session
+                                continue
+                    
+                    finally:
+                        cap.release()
+                        cv2.destroyAllWindows()
+                        print("✅ Continuous attendance session ended")
+                
+                elif choice == "4":
                     print("\n📊 Attendance Analytics:")
                     analytics = attendance_manager.get_attendance_analytics()
                     
@@ -1207,7 +1448,7 @@ def main():
                         new_threshold = float(input("Enter new confidence threshold (0.0-1.0): "))
                         new_entries = int(input("Enter new max daily entries: "))
                         
-                        success = attendance_manager.update_config({
+                        success = attendance_manager.update_configuration({
                             'confidence_threshold': new_threshold,
                             'max_daily_entries': new_entries
                         })

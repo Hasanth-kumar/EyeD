@@ -1,7 +1,6 @@
 """
-Enhanced Attendance Table Component - Phase 4 Implementation
+Attendance Table Component
 Provides advanced filtering, search, and table view for attendance data
-Uses service layer for data access and business logic
 """
 
 import streamlit as st
@@ -11,28 +10,19 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 def load_attendance_data():
-    """Load attendance data through the service layer"""
+    """Load attendance data directly from CSV file"""
     try:
-        # Get attendance service from session state
-        if 'attendance_service' not in st.session_state:
-            return None, "Services not initialized. Please refresh the page."
+        # Load attendance data directly from CSV
+        attendance_file = Path("data/attendance.csv")
         
-        attendance_service = st.session_state.attendance_service
+        if not attendance_file.exists():
+            return None, "No attendance data file found. Start using the system to see logs."
         
-        # Get attendance history through service
-        attendance_data = attendance_service.get_attendance_report_by_type("detailed_history")
+        # Read CSV file
+        df = pd.read_csv(attendance_file)
         
-        if not attendance_data or 'attendance_data' not in attendance_data:
+        if df.empty:
             return None, "No attendance data available yet. Start using the system to see logs."
-        
-        # Extract the actual attendance data from the report
-        actual_data = attendance_data['attendance_data']
-        
-        if not actual_data or len(actual_data) == 0:
-            return None, "No attendance data available yet. Start using the system to see logs."
-        
-        # Convert to DataFrame for easier manipulation
-        df = pd.DataFrame(actual_data)
         
         # Ensure required columns exist
         required_columns = ['Date', 'Time', 'Name', 'ID', 'Status', 'Confidence']
@@ -62,41 +52,38 @@ def load_attendance_data():
 
 def add_status_emoji(status):
     """Add emoji markers to status"""
-    if pd.isna(status):
+    if pd.isna(status) or status is None:
         return "❓ Unknown"
-    elif "present" in str(status).lower():
-        return "✅ Present"
-    elif "absent" in str(status).lower():
-        return "❌ Absent"
-    elif "late" in str(status).lower():
-        return "🌙 Late"
-    else:
-        return f"📝 {status}"
+    try:
+        status_str = str(status).lower()
+        if "present" in status_str or "logged" in status_str:
+            return "✅ Present"
+        elif "absent" in status_str:
+            return "❌ Absent"
+        elif "late" in status_str:
+            return "🌙 Late"
+        else:
+            return f"📝 {status}"
+    except Exception:
+        return "❓ Unknown"
 
 def categorize_confidence(confidence):
     """Categorize confidence levels"""
-    if pd.isna(confidence):
+    if pd.isna(confidence) or confidence is None:
         return "Unknown"
-    elif confidence >= 0.8:
-        return "🟢 High"
-    elif confidence >= 0.6:
-        return "🟡 Medium"
-    else:
-        return "🔴 Low"
+    try:
+        confidence = float(confidence)
+        if confidence >= 0.8:
+            return "🟢 High"
+        elif confidence >= 0.6:
+            return "🟡 Medium"
+        else:
+            return "🔴 Low"
+    except (ValueError, TypeError):
+        return "Unknown"
 
 def show_attendance_table():
-    """Show enhanced attendance table with advanced filtering and search"""
-    st.header("📋 Enhanced Attendance Table - Phase 4")
-    st.markdown("**Service Layer Architecture with Advanced Filtering**")
-    
-    # Architecture info
-    st.info("""
-    🏗️ **New Architecture**: This component now uses the service layer instead of direct file access.
-    - **Service Layer**: Business logic orchestration
-    - **Repository Layer**: Data persistence
-    - **Clean Separation**: UI components depend on services, not data directly
-    """)
-    
+    """Show attendance table with advanced filtering and search"""
     # Load data through service layer
     df, error = load_attendance_data()
     if error:
@@ -114,14 +101,19 @@ def show_attendance_table():
     
     with col1:
         # Date range filter
-        min_date = df['Date'].min().date()
-        max_date = df['Date'].max().date()
-        date_range = st.date_input(
-            "Date Range",
-            value=(min_date, max_date),
-            min_value=min_date,
-            max_value=max_date
-        )
+        try:
+            min_date = df['Date'].min().date()
+            max_date = df['Date'].max().date()
+            date_range = st.date_input(
+                "Date Range",
+                value=(min_date, max_date),
+                min_value=min_date,
+                max_value=max_date
+            )
+        except Exception:
+            # Fallback to default date range if there's an issue
+            today = datetime.now().date()
+            date_range = (today, today)
         
         # Quick date filters
         quick_filters = st.selectbox(
@@ -131,12 +123,20 @@ def show_attendance_table():
     
     with col2:
         # User filter
-        all_users = ["All Users"] + sorted(df['Name'].unique().tolist())
-        user_filter = st.selectbox("Select User", all_users)
+        try:
+            all_users = ["All Users"] + sorted(df['Name'].unique().tolist())
+            user_filter = st.selectbox("Select User", all_users)
+        except Exception:
+            all_users = ["All Users"]
+            user_filter = "All Users"
         
         # Status filter
-        all_statuses = ["All Statuses"] + sorted(df['Status'].unique().tolist())
-        status_filter = st.selectbox("Select Status", all_statuses)
+        try:
+            all_statuses = ["All Statuses"] + sorted(df['Status'].unique().tolist())
+            status_filter = st.selectbox("Select Status", all_statuses)
+        except Exception:
+            all_statuses = ["All Statuses"]
+            status_filter = "All Statuses"
         
         # Confidence filter
         confidence_filter = st.selectbox(
@@ -152,8 +152,23 @@ def show_attendance_table():
         )
         
         # Quality score filter
-        min_quality = float(df['Face_Quality_Score'].min()) if 'Face_Quality_Score' in df.columns else 0.0
-        max_quality = float(df['Face_Quality_Score'].max()) if 'Face_Quality_Score' in df.columns else 1.0
+        if 'Face_Quality_Score' in df.columns and not df['Face_Quality_Score'].empty:
+            min_quality = df['Face_Quality_Score'].min()
+            max_quality = df['Face_Quality_Score'].max()
+            
+            # Handle NaN values and ensure valid range
+            if pd.isna(min_quality) or pd.isna(max_quality):
+                min_quality, max_quality = 0.0, 1.0
+            else:
+                min_quality = float(min_quality)
+                max_quality = float(max_quality)
+                
+                # Ensure min < max
+                if min_quality >= max_quality:
+                    min_quality, max_quality = 0.0, 1.0
+        else:
+            min_quality, max_quality = 0.0, 1.0
+            
         quality_range = st.slider(
             "Quality Score Range",
             min_value=min_quality,
@@ -235,12 +250,12 @@ def show_attendance_table():
             filtered_df = filtered_df[search_mask]
     
     with col2:
-        if st.button("🔄 Reset Filters"):
+        if st.button("🔄 Reset Filters", key="attendance_reset_filters_btn"):
             st.rerun()
     
     with col3:
         # Export functionality
-        if st.button("📤 Export Data"):
+        if st.button("📤 Export Data", key="attendance_export_btn"):
             export_data(filtered_df)
     
     # Display filtered results
@@ -268,11 +283,11 @@ def show_attendance_table():
             avg_quality = filtered_df['Face_Quality_Score'].mean()
             st.metric("Avg Quality", f"{avg_quality:.2f}" if not pd.isna(avg_quality) else "N/A")
     
-    # Enhanced data table
+    # Data table
     if len(filtered_df) > 0:
         # Select columns to display
         display_columns = [
-            'Name', 'ID', 'Date', 'Time', 'Status_Display', 'Confidence_Level',
+            'Name', 'ID', 'Date', 'Time', 'Status_Display', 'Confidence',
             'Liveness_Verified', 'Face_Quality_Score', 'Processing_Time_MS'
         ]
         
@@ -287,6 +302,18 @@ def show_attendance_table():
             display_df['Date'] = display_df['Date'].dt.strftime('%Y-%m-%d')
         if 'Time' in display_df.columns:
             display_df['Time'] = display_df['Time'].dt.strftime('%H:%M:%S')
+        
+        # Format confidence values as percentages
+        if 'Confidence' in display_df.columns:
+            display_df['Confidence'] = display_df['Confidence'].apply(
+                lambda x: f"{float(x):.1%}" if pd.notna(x) and x is not None else "N/A"
+            )
+        
+        # Format liveness verification as checkmarks
+        if 'Liveness_Verified' in display_df.columns:
+            display_df['Liveness_Verified'] = display_df['Liveness_Verified'].apply(
+                lambda x: "✅" if x == True else "❌" if x == False else "❓"
+            )
         
         # Add row numbers
         display_df.insert(0, 'Row', range(1, len(display_df) + 1))
@@ -303,8 +330,8 @@ def show_attendance_table():
                 "Date": st.column_config.TextColumn("Date", width="small"),
                 "Time": st.column_config.TextColumn("Time", width="small"),
                 "Status_Display": st.column_config.TextColumn("Status", width="small"),
-                "Confidence_Level": st.column_config.TextColumn("Confidence", width="small"),
-                "Liveness_Verified": st.column_config.CheckboxColumn("Liveness", width="small"),
+                "Confidence": st.column_config.TextColumn("Confidence", width="small"),
+                "Liveness_Verified": st.column_config.TextColumn("Liveness", width="small"),
                 "Face_Quality_Score": st.column_config.NumberColumn("Quality", format="%.2f", width="small"),
                 "Processing_Time_MS": st.column_config.NumberColumn("Time (ms)", format="%.1f", width="small")
             }

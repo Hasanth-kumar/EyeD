@@ -1,3 +1,1 @@
-Year,Month,Total_Attendance
-2025,August,95
-2025,July,7
+Year,Month,Total_Attendance,Present_Count,Late_Count,Absent_Count,Attendance_Rate

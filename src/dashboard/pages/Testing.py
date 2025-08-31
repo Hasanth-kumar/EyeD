@@ -15,6 +15,29 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# Set current page in session state for navigation highlighting
+st.session_state.current_page = "testing"
+
+# Hide the top navigation bar
+st.markdown("""
+<style>
+    /* Hide the top navigation bar completely */
+    .stApp > header {
+        display: none !important;
+    }
+    
+    /* Hide the hamburger menu button */
+    .stApp > div[data-testid="stToolbar"] {
+        display: none !important;
+    }
+    
+    /* Professional spacing */
+    .stApp > div[data-testid="stAppViewContainer"] {
+        padding-top: 1rem !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 # Initialize services if not already done
 def initialize_services():
     """Initialize services for this page"""

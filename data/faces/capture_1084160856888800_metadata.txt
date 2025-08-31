@@ -1,4 +1,0 @@
-Capture Time: 1084160856888800
-Frame Size: 640x480
-Recognition Results:
-  - Unknown: 0.000

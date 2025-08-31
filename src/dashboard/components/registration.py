@@ -1,38 +1,41 @@
 """
-User Registration Component - Phase 4 Implementation
-Provides user registration interface using service layer architecture
+User Registration Component
+Provides clean user registration interface
 """
 
 import streamlit as st
 import cv2
 import numpy as np
 from PIL import Image
+from datetime import datetime
 import io
 import time
-from datetime import datetime
+import os
+from pathlib import Path
 
 def show_registration():
     """Show user registration interface"""
-    st.header("👤 User Registration - Phase 4")
-    st.markdown("**Service Layer Architecture for User Management**")
-    
-    # Architecture info
-    st.info("""
-    🏗️ **New Architecture**: Registration now uses the service layer for business logic.
-    - **Service Layer**: Orchestrates registration workflow
-    - **Repository Layer**: Handles user data persistence
-    - **Clean Separation**: UI components depend on services, not modules directly
-    """)
-    
     # Check if services are available
     if 'attendance_service' not in st.session_state:
         st.error("Services not initialized. Please refresh the page.")
-        st.info("The registration system requires the service layer to be active.")
+        return
+        
+    if 'face_database' not in st.session_state:
+        st.error("Face database not initialized. Please refresh the page.")
         return
     
     # Get services from session state
     attendance_service = st.session_state.attendance_service
     face_database = st.session_state.face_database
+    
+    # Initialize face registration module
+    try:
+        from src.modules.registration import FaceRegistration
+        face_registration = FaceRegistration()
+        st.session_state.face_registration = face_registration
+    except Exception as e:
+        st.error(f"Failed to initialize face registration: {e}")
+        return
     
     # Registration form
     st.subheader("📝 New User Registration")
@@ -42,7 +45,7 @@ def show_registration():
         col1, col2 = st.columns(2)
         
         with col1:
-            user_id = st.text_input("User ID", placeholder="e.g., EMP001")
+            username = st.text_input("Username", placeholder="e.g., alice_johnson")
             first_name = st.text_input("First Name", placeholder="John")
             last_name = st.text_input("Last Name", placeholder="Doe")
         
@@ -75,9 +78,15 @@ def show_registration():
             face_image = uploaded_file
             st.success("✅ Face image uploaded")
         
+        # Show status of face capture
+        if face_image is None:
+            st.warning("⚠️ Please capture a face image using the camera or upload an image file")
+        else:
+            st.success("✅ Face image ready")
+        
         # Display captured image
         if face_image is not None:
-            st.image(face_image, caption="Captured Face Image", use_column_width=True)
+            st.image(face_image, caption="Captured Face Image", use_container_width=True)
             
             # Image quality check
             if st.checkbox("🔍 Analyze Image Quality"):
@@ -135,86 +144,195 @@ def show_registration():
         submitted = st.form_submit_button("🚀 Register User")
         
         if submitted:
-            if not all([user_id, first_name, last_name, email, face_image]):
+            # Log registration attempt
+            from src.utils.logger import setup_logger
+            from datetime import datetime
+            logger = setup_logger("RegistrationComponent")
+            logger.info("=" * 60)
+            logger.info("STREAMLIT REGISTRATION FORM SUBMITTED")
+            logger.info("=" * 60)
+            logger.info(f"Username: {username}")
+            logger.info(f"First Name: {first_name}")
+            logger.info(f"Last Name: {last_name}")
+            logger.info(f"Email: {email}")
+            logger.info(f"Department: {department}")
+            logger.info(f"Role: {role}")
+            logger.info(f"Face Image Provided: {'Yes' if face_image else 'No'}")
+            logger.info(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info("=" * 60)
+            
+            # Check each field individually for better validation
+            missing_fields = []
+            if not username or username.strip() == "":
+                missing_fields.append("Username")
+            if not first_name or first_name.strip() == "":
+                missing_fields.append("First Name")
+            if not last_name or last_name.strip() == "":
+                missing_fields.append("Last Name")
+            if not email or email.strip() == "":
+                missing_fields.append("Email")
+            if not face_image:
+                missing_fields.append("Face Image")
+            
+            if missing_fields:
+                logger.warning(f"Registration validation failed - Missing fields: {missing_fields}")
                 st.error("❌ Please fill in all required fields and capture a face image.")
+                st.write("**Missing or empty fields:**")
+                for field in missing_fields:
+                    st.write(f"- {field}")
                 return
+            
+            logger.info("Registration form validation passed - Proceeding with user registration")
             
             # Show processing
             with st.spinner("🔄 Processing registration..."):
                 try:
-                    # Simulate registration process through service layer
-                    registration_result = process_registration(
-                        attendance_service=attendance_service,
-                        face_database=face_database,
-                        user_data={
-                            'user_id': user_id,
-                            'first_name': first_name,
-                            'last_name': last_name,
-                            'email': email,
-                            'department': department,
-                            'role': role,
-                            'face_image': face_image,
-                            'enable_liveness': enable_liveness,
-                            'auto_attendance': auto_attendance,
-                            'notification_email': notification_email,
-                            'create_backup': create_backup
-                        }
-                    )
+                    # Prepare user metadata
+                    user_metadata = {
+                        'first_name': first_name,
+                        'last_name': last_name,
+                        'email': email,
+                        'department': department,
+                        'role': role,
+                        'enable_liveness': enable_liveness,
+                        'auto_attendance': auto_attendance,
+                        'notification_email': notification_email,
+                        'create_backup': create_backup
+                    }
                     
-                    if registration_result['success']:
-                        st.success("✅ User registered successfully!")
+                    # Register user using face registration module
+                    # First, save the uploaded image temporarily
+                    import tempfile
+                    import os
+                    
+                    with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
+                        # Convert PIL image to bytes and save
+                        if hasattr(face_image, 'read'):
+                            # It's an uploaded file
+                            tmp_file.write(face_image.read())
+                            face_image.seek(0)  # Reset file pointer
+                        elif hasattr(face_image, 'save'):
+                            # It's a PIL Image (camera)
+                            face_image.save(tmp_file.name, 'JPEG')
+                        else:
+                            st.error("❌ Unsupported image format")
+                            return
                         
-                        # Show registration summary
-                        st.subheader("📋 Registration Summary")
+                        tmp_path = tmp_file.name
+                    
+                    try:
+                        # Register user using the correct method
+                        success = face_registration.register_from_image(
+                            image_path=tmp_path,
+                            user_name=f"{first_name} {last_name}",
+                            user_id=username
+                        )
                         
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            st.write(f"**User ID:** {user_id}")
-                            st.write(f"**Name:** {first_name} {last_name}")
-                            st.write(f"**Email:** {email}")
+                        # Clean up temp file
+                        os.unlink(tmp_path)
                         
-                        with col2:
-                            st.write(f"**Department:** {department}")
-                            st.write(f"**Role:** {role}")
-                            st.write(f"**Registration Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                        if success:
+                            # Log successful registration completion
+                            logger.info("=" * 60)
+                            logger.info("STREAMLIT REGISTRATION COMPLETED SUCCESSFULLY")
+                            logger.info("=" * 60)
+                            logger.info(f"Username: {username}")
+                            logger.info(f"Full Name: {first_name} {last_name}")
+                            logger.info(f"Email: {email}")
+                            logger.info(f"Department: {department}")
+                            logger.info(f"Role: {role}")
+                            logger.info(f"Completion Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                            logger.info("=" * 60)
+                            
+                            st.success("✅ User registered successfully!")
+                            
+                            # Show registration summary
+                            st.subheader("📋 Registration Summary")
+                            
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                st.write(f"**Username:** {username}")
+                                st.write(f"**Name:** {first_name} {last_name}")
+                                st.write(f"**Email:** {email}")
+                            
+                            with col2:
+                                st.write(f"**Department:** {department}")
+                                st.write(f"**Role:** {role}")
+                                st.write(f"**Registration Date:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                            
+                            # Clear form
+                            st.rerun()
+                        else:
+                            logger.error("=" * 60)
+                            logger.error("STREAMLIT REGISTRATION FAILED")
+                            logger.error("=" * 60)
+                            logger.error(f"Username: {username}")
+                            logger.error(f"Full Name: {first_name} {last_name}")
+                            logger.error(f"Error: Registration process returned False")
+                            logger.error("=" * 60)
+                            
+                            st.error("❌ Failed to register user. Please try again.")
+                            
+                    except Exception as e:
+                        logger.error("=" * 60)
+                        logger.error("STREAMLIT REGISTRATION ERROR")
+                        logger.error("=" * 60)
+                        logger.error(f"Username: {username}")
+                        logger.error(f"Full Name: {first_name} {last_name}")
+                        logger.error(f"Error: {str(e)}")
+                        logger.error(f"Error Type: {type(e).__name__}")
+                        logger.error("=" * 60)
                         
-                        # Show next steps
-                        st.info("""
-                        **Next Steps:**
-                        1. User can now use the attendance system
-                        2. Face recognition will work immediately
-                        3. Liveness detection is enabled (if selected)
-                        4. Welcome email sent (if selected)
-                        """)
-                        
-                        # Clear form
-                        st.rerun()
-                    else:
-                        st.error(f"❌ Registration failed: {registration_result['error']}")
+                        st.error(f"❌ Registration error: {e}")
+                        # Clean up temp file on error
+                        if 'tmp_path' in locals():
+                            try:
+                                os.unlink(tmp_path)
+                            except:
+                                pass
+                        st.info("Please check the system logs for more details.")
                         
                 except Exception as e:
-                    st.error(f"❌ Registration error: {e}")
+                    logger.error("=" * 60)
+                    logger.error("STREAMLIT REGISTRATION UNEXPECTED ERROR")
+                    logger.error("=" * 60)
+                    logger.error(f"Username: {username}")
+                    logger.error(f"Full Name: {first_name} {last_name}")
+                    logger.error(f"Error: {str(e)}")
+                    logger.error(f"Error Type: {type(e).__name__}")
+                    logger.error("=" * 60)
+                    
+                    st.error(f"❌ Unexpected error during registration: {e}")
                     st.info("Please check the system logs for more details.")
     
     # Show existing users
     st.subheader("👥 Registered Users")
     
     try:
-        if face_database and hasattr(face_database, 'users_db'):
-            users = face_database.users_db
+        if 'face_registration' in st.session_state:
+            # Use list_users for more detailed information
+            users = face_registration.list_users()
             
             if users:
-                # Convert to DataFrame for display
+                # Convert to DataFrame for display with more details
                 user_data = []
-                for user_id, user_info in users.items():
+                for user in users:
+                    # Format registration date
+                    reg_date = user.get('registration_date', 'Unknown')
+                    if reg_date != 'Unknown':
+                        try:
+                            # Parse ISO format date and format nicely
+                            from datetime import datetime
+                            dt = datetime.fromisoformat(reg_date.replace('Z', '+00:00'))
+                            reg_date = dt.strftime('%Y-%m-%d %H:%M')
+                        except:
+                            reg_date = reg_date[:10] if len(reg_date) > 10 else reg_date
+                    
                     user_data.append({
-                        'User ID': user_id,
-                        'Name': f"{user_info.get('first_name', '')} {user_info.get('last_name', '')}",
-                        'Email': user_info.get('email', ''),
-                        'Department': user_info.get('department', ''),
-                        'Role': user_info.get('role', ''),
-                        'Registration Date': user_info.get('registration_date', ''),
-                        'Status': 'Active' if user_info.get('active', True) else 'Inactive'
+                        'User ID': user.get('user_id', 'Unknown'),
+                        'Name': user.get('name', 'Unknown'),
+                        'Registration Date': reg_date,
+                        'Status': 'Active'
                     })
                 
                 if user_data:
@@ -223,69 +341,17 @@ def show_registration():
                     st.dataframe(df, use_container_width=True)
                     
                     # User statistics
-                    col1, col2, col3 = st.columns(3)
+                    col1, col2 = st.columns(2)
                     with col1:
                         st.metric("Total Users", len(users))
                     with col2:
-                        active_users = len([u for u in users.values() if u.get('active', True)])
-                        st.metric("Active Users", active_users)
-                    with col3:
-                        st.metric("Departments", len(set(u.get('department', '') for u in users.values())))
+                        st.metric("Active Users", len(users))
                 else:
                     st.info("No user data available for display.")
             else:
                 st.info("No users registered yet.")
         else:
-            st.warning("User database not available.")
+            st.warning("Face registration system not available.")
             
     except Exception as e:
         st.error(f"Error loading user data: {e}")
-    
-    # Architecture benefits
-    st.subheader("🏗️ Architecture Benefits")
-    
-    st.success("""
-    **Phase 4 Achievements:**
-    - ✅ **Service Layer**: Registration business logic centralized
-    - ✅ **Repository Layer**: User data persistence handled cleanly
-    - ✅ **Dependency Injection**: Components depend on services, not implementations
-    - ✅ **Single Responsibility**: Each layer has one clear purpose
-    - ✅ **Testability**: Registration workflow can be easily tested
-    - ✅ **Maintainability**: Changes isolated to specific layers
-    """)
-
-def process_registration(attendance_service, face_database, user_data):
-    """Process user registration through service layer"""
-    try:
-        # This would normally go through the service layer
-        # For now, we'll simulate the process
-        
-        # Simulate processing time
-        time.sleep(1)
-        
-        # Add user to face database
-        if face_database and hasattr(face_database, 'users_db'):
-            face_database.users_db[user_data['user_id']] = {
-                'first_name': user_data['first_name'],
-                'last_name': user_data['last_name'],
-                'email': user_data['email'],
-                'department': user_data['department'],
-                'role': user_data['role'],
-                'registration_date': datetime.now().isoformat(),
-                'active': True,
-                'enable_liveness': user_data['enable_liveness'],
-                'auto_attendance': user_data['auto_attendance']
-            }
-        
-        return {
-            'success': True,
-            'user_id': user_data['user_id'],
-            'message': 'User registered successfully'
-        }
-        
-    except Exception as e:
-        return {
-            'success': False,
-            'error': str(e)
-        }
-

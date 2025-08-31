@@ -15,12 +15,11 @@ import json
 import numpy as np
 from datetime import datetime
 from deepface import DeepFace
-from typing import Tuple, Optional, Dict, Any
-import logging
+from typing import Tuple, Optional, Dict, Any, List
+from src.utils.logger import setup_logger
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Use centralized logging system
+logger = setup_logger("FaceRegistration")
 
 class FaceRegistration:
     """
@@ -64,27 +63,58 @@ class FaceRegistration:
         # Load existing embeddings
         self.embeddings_db = self._load_embeddings()
         
-        logger.info(f"Face Registration initialized. Data directory: {data_dir}")
+        # Log initialization summary
+        logger.info("=" * 60)
+        logger.info("FACE REGISTRATION SYSTEM INITIALIZED")
+        logger.info("=" * 60)
+        logger.info(f"Data Directory: {data_dir}")
+        logger.info(f"Embeddings File: {self.embeddings_file}")
+        logger.info(f"Total Users Loaded: {len([k for k, v in self.embeddings_db.items() if isinstance(v, dict) and 'name' in v])}")
+        logger.info(f"Face Cascade Loaded: {'Yes' if self.face_cascade is not None else 'No'}")
+        logger.info("=" * 60)
     
     def _load_embeddings(self) -> Dict[str, Any]:
         """Load existing face embeddings from JSON file"""
         if os.path.exists(self.embeddings_file):
             try:
+                logger.info(f"Loading existing embeddings database from: {self.embeddings_file}")
+                file_size = os.path.getsize(self.embeddings_file)
+                logger.info(f"Database file size: {file_size} bytes")
+                
                 with open(self.embeddings_file, 'r') as f:
-                    return json.load(f)
-            except (json.JSONDecodeError, FileNotFoundError):
-                logger.warning("Could not load existing embeddings, starting fresh")
+                    data = json.load(f)
+                
+                user_count = len([k for k, v in data.items() if isinstance(v, dict) and "name" in v])
+                logger.info(f"Loaded {user_count} users from existing database")
+                
+                return data
+            except (json.JSONDecodeError, FileNotFoundError) as e:
+                logger.warning(f"Could not load existing embeddings: {e}")
+                logger.warning("Starting with fresh database")
                 return {}
-        return {}
+            except Exception as e:
+                logger.error(f"Unexpected error loading embeddings: {e}")
+                logger.error("Starting with fresh database")
+                return {}
+        else:
+            logger.info("No existing embeddings database found - starting fresh")
+            return {}
     
     def _save_embeddings(self):
         """Save face embeddings to JSON file"""
         try:
+            logger.info(f"Saving embeddings database to: {self.embeddings_file}")
+            logger.info(f"Total users in database: {len(self.embeddings_db)}")
+            
             with open(self.embeddings_file, 'w') as f:
                 json.dump(self.embeddings_db, f, indent=2)
-            logger.info(f"Embeddings saved to {self.embeddings_file}")
+            
+            logger.info(f"Embeddings database saved successfully to {self.embeddings_file}")
+            logger.info(f"Database file size: {os.path.getsize(self.embeddings_file)} bytes")
         except Exception as e:
-            logger.error(f"Failed to save embeddings: {e}")
+            logger.error(f"Failed to save embeddings database: {e}")
+            logger.error(f"Database file: {self.embeddings_file}")
+            logger.error(f"Error type: {type(e).__name__}")
     
     def _detect_faces(self, frame: np.ndarray) -> list:
         """
@@ -255,10 +285,19 @@ class FaceRegistration:
         if not user_id:
             user_id = f"user_{int(datetime.now().timestamp())}"
         
+        # Log webcam capture attempt
+        logger.info("=" * 60)
+        logger.info("STARTING WEBCAM FACE CAPTURE REGISTRATION")
+        logger.info("=" * 60)
+        logger.info(f"User Name: {user_name}")
+        logger.info(f"User ID: {user_id}")
+        logger.info(f"Timestamp: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info("=" * 60)
+        
         # Initialize webcam
         cap = cv2.VideoCapture(0)
         if not cap.isOpened():
-            logger.error("Could not open webcam")
+            logger.error("Could not open webcam - Registration failed")
             return False
         
         # Set webcam properties for better performance
@@ -357,7 +396,13 @@ class FaceRegistration:
                 key = cv2.waitKey(1) & 0xFF
                 
                 if key == 27:  # ESC key
-                    logger.info("Registration cancelled by user")
+                    logger.info("=" * 60)
+                    logger.info("WEBCAM FACE CAPTURE REGISTRATION CANCELLED BY USER")
+                    logger.info("=" * 60)
+                    logger.info(f"User: {user_name}")
+                    logger.info(f"User ID: {user_id}")
+                    logger.info(f"Cancellation Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                    logger.info("=" * 60)
                     break
                 elif key == 32:  # SPACE key
                     logger.info(f"SPACE key pressed! Detected {len(faces)} faces")
@@ -395,9 +440,19 @@ class FaceRegistration:
                                 # Save to file
                                 self._save_embeddings()
                                 
-                                logger.info(f"Successfully registered user: {user_name} (ID: {user_id})")
-                                logger.info(f"Face image saved: {image_path}")
-                                logger.info(f"Embedding vector length: {len(embedding)}")
+                                # Log successful registration with comprehensive details
+                                logger.info("=" * 60)
+                                logger.info("WEBCAM FACE CAPTURE REGISTRATION COMPLETED SUCCESSFULLY")
+                                logger.info("=" * 60)
+                                logger.info(f"User ID: {user_id}")
+                                logger.info(f"User Name: {user_name}")
+                                logger.info(f"Registration Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                                logger.info(f"Face Image: {image_filename}")
+                                logger.info(f"Image Path: {image_path}")
+                                logger.info(f"Embedding Vector Length: {len(embedding)}")
+                                logger.info(f"Face Bounding Box: x={x}, y={y}, w={w}, h={h}")
+                                logger.info(f"Database File: {self.embeddings_file}")
+                                logger.info("=" * 60)
                                 
                                 # Show success message
                                 cv2.putText(frame, "Registration Successful!", 
@@ -426,8 +481,61 @@ class FaceRegistration:
         finally:
             cap.release()
             cv2.destroyAllWindows()
+            logger.info("Webcam resources released and windows closed")
+        
+        logger.info("=" * 60)
+        logger.info("WEBCAM FACE CAPTURE REGISTRATION ENDED")
+        logger.info("=" * 60)
+        logger.info(f"User: {user_name}")
+        logger.info(f"User ID: {user_id}")
+        logger.info(f"Final Status: {'SUCCESS' if 'success' in locals() else 'FAILED'}")
+        logger.info("=" * 60)
         
         return False
+    
+    def user_exists(self, username: str) -> bool:
+        """Check if a user already exists"""
+        return username in self.embeddings_db
+    
+    def _update_cache(self, username: str, embedding: np.ndarray, user_data: Dict[str, Any]):
+        """Update in-memory cache with new user data"""
+        try:
+            # This method would update any in-memory caches
+            # For now, we just log the update
+            logger.info(f"Cache updated for user: {username}")
+        except Exception as e:
+            logger.warning(f"Failed to update cache for {username}: {e}")
+    
+    def get_database_stats(self) -> Dict[str, Any]:
+        """Get database statistics"""
+        try:
+            total_users = len(self.embeddings_db)
+            return {
+                "total_users": total_users,
+                "database_path": str(self.embeddings_file),
+                "faces_directory": str(self.data_dir),
+                "last_updated": datetime.now().isoformat()
+            }
+        except Exception as e:
+            logger.error(f"Failed to get database stats: {e}")
+            return {}
+    
+    def list_users(self) -> List[Dict[str, Any]]:
+        """List all registered users with their details"""
+        try:
+            users = []
+            for user_id, data in self.embeddings_db.items():
+                if isinstance(data, dict) and "name" in data:
+                    users.append({
+                        "user_id": user_id,
+                        "name": data.get("name", "Unknown"),
+                        "registration_date": data.get("registration_date", "Unknown"),
+                        "image_path": data.get("image_path", "Unknown")
+                    })
+            return users
+        except Exception as e:
+            logger.error(f"Failed to list users: {e}")
+            return []
     
     def register_from_image(self, image_path: str, user_name: str, user_id: str = None) -> bool:
         """
@@ -444,6 +552,10 @@ class FaceRegistration:
         if not user_id:
             user_id = f"user_{int(datetime.now().timestamp())}"
         
+        # Log registration attempt
+        logger.info(f"Starting user registration process - User: {user_name}, ID: {user_id}")
+        logger.info(f"Image path: {image_path}")
+        
         try:
             # Load image
             frame = cv2.imread(image_path)
@@ -452,50 +564,89 @@ class FaceRegistration:
                 return False
             
             # Detect faces
+            logger.info("Detecting faces in uploaded image...")
             faces = self._detect_faces(frame)
             
+            logger.info(f"Face detection completed - Found {len(faces)} face(s)")
+            
             if len(faces) != 1:
-                logger.error(f"Expected 1 face, found {len(faces)}")
+                logger.error(f"Expected 1 face, found {len(faces)} - Registration failed")
                 return False
             
             x, y, w, h = faces[0]
+            logger.info(f"Face detected at position: x={x}, y={y}, w={w}, h={h}")
             
+            logger.info("Validating face image quality...")
             if not self._validate_face_quality(frame, (x, y, w, h)):
-                logger.error("Face quality validation failed")
+                logger.error("Face quality validation failed - Image quality too low for registration")
                 return False
+            
+            logger.info("Face quality validation passed")
             
             # Extract face region
             face_image = frame[y:y+h, x:x+w]
             
             # Extract embedding
+            logger.info("Extracting face embedding using DeepFace...")
             embedding = self._extract_embedding(face_image)
             
             if embedding is None:
-                logger.error("Failed to extract face embedding")
+                logger.error("Failed to extract face embedding - Registration cannot proceed")
                 return False
+            
+            logger.info(f"Face embedding extracted successfully - Vector length: {len(embedding)}")
             
             # Save face image
             image_filename = f"{user_id}_{user_name}.jpg"
             save_path = os.path.join(self.data_dir, image_filename)
+            logger.info(f"Saving face image to: {save_path}")
             cv2.imwrite(save_path, face_image)
             
-            # Save embedding and metadata
-            self.embeddings_db[user_id] = {
+            # Prepare user metadata
+            registration_date = datetime.now()
+            user_metadata = {
                 "name": user_name,
                 "embedding": embedding.tolist(),
                 "image_path": image_filename,
-                "registration_date": datetime.now().isoformat(),
+                "registration_date": registration_date.isoformat(),
                 "face_bbox": [x, y, w, h]
             }
+            
+            logger.info(f"User metadata prepared - Name: {user_name}, ID: {user_id}, Date: {registration_date}")
+            
+            # Save embedding and metadata to database
+            self.embeddings_db[user_id] = user_metadata
+            logger.info("User data added to in-memory database")
             
             # Save to file
             self._save_embeddings()
             
-            logger.info(f"Successfully registered user from image: {user_name} (ID: {user_id})")
+            # Log successful registration with comprehensive details
+            logger.info("=" * 60)
+            logger.info("USER REGISTRATION COMPLETED SUCCESSFULLY")
+            logger.info("=" * 60)
+            logger.info(f"User ID: {user_id}")
+            logger.info(f"User Name: {user_name}")
+            logger.info(f"Registration Date: {registration_date.strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"Face Image: {image_filename}")
+            logger.info(f"Image Path: {save_path}")
+            logger.info(f"Embedding Vector Length: {len(embedding)}")
+            logger.info(f"Face Bounding Box: x={x}, y={y}, w={w}, h={h}")
+            logger.info(f"Database File: {self.embeddings_file}")
+            logger.info("=" * 60)
+            
             return True
             
         except Exception as e:
-            logger.error(f"Failed to register from image: {e}")
+            logger.error("=" * 60)
+            logger.error("USER REGISTRATION FAILED")
+            logger.error("=" * 60)
+            logger.error(f"User: {user_name}")
+            logger.error(f"User ID: {user_id}")
+            logger.error(f"Error: {str(e)}")
+            logger.error(f"Error Type: {type(e).__name__}")
+            logger.error(f"Image Path: {image_path}")
+            logger.error("=" * 60)
             return False
     
     def get_registered_users(self) -> Dict[str, str]:
@@ -507,8 +658,8 @@ class FaceRegistration:
         """
         users = {}
         for user_id, data in self.embeddings_db.items():
-            # Skip metadata fields and only process user entries
-            if user_id.startswith("user_") and isinstance(data, dict) and "name" in data:
+            # Process all user entries (not just those starting with "user_")
+            if isinstance(data, dict) and "name" in data:
                 users[user_id] = data["name"]
         return users
     

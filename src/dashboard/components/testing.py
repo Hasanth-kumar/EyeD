@@ -14,7 +14,6 @@ import time
 
 def show_testing():
     """Show testing suite interface"""
-    st.header("🧪 Testing Suite")
     st.markdown("**Test image quality, face detection, and system performance**")
     
     # Testing tabs
@@ -47,7 +46,7 @@ def show_image_quality_testing():
     if test_image is not None:
         # Load and display image
         image = Image.open(test_image)
-        st.image(image, caption="Test Image", use_column_width=True)
+        st.image(image, caption="Test Image", use_container_width=True)
         
         # Run quality assessment
         quality_results = run_comprehensive_quality_test(image)
@@ -126,7 +125,7 @@ def show_face_detection_testing():
     if face_test_image is not None:
         # Load image
         image = Image.open(face_test_image)
-        st.image(image, caption="Face Detection Test Image", use_column_width=True)
+        st.image(image, caption="Face Detection Test Image", use_container_width=True)
         
         # Run face detection test
         detection_results = run_face_detection_test(image)
@@ -163,7 +162,7 @@ def show_face_detection_testing():
             
             # Create annotated image
             annotated_image = create_annotated_image(image, detection_results['face_details'])
-            st.image(annotated_image, caption="Annotated Image with Face Detection", use_column_width=True)
+            st.image(annotated_image, caption="Annotated Image with Face Detection", use_container_width=True)
 
 def show_performance_testing():
     """Show performance testing interface"""
@@ -181,7 +180,7 @@ def show_performance_testing():
         iterations = st.slider("Number of Iterations", 1, 100, 10)
     
     with col2:
-        if st.button("🚀 Run Performance Test"):
+        if st.button("🚀 Run Performance Test", key="testing_performance_test_btn"):
             with st.spinner("Running performance test..."):
                 performance_results = run_performance_test(test_type, iterations)
                 

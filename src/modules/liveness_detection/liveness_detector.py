@@ -83,8 +83,9 @@ class LivenessDetection(LivenessInterface):
                 return LivenessResult(
                     is_live=False,
                     confidence=0.0,
-                    test_type=LivenessTestType.BLINK,
-                    details={"error": "No face landmarks detected"}
+                    test_type=LivenessTestType.BLINK_DETECTION,
+                    details={"error": "No face landmarks detected"},
+                    processing_time_ms=0.0
                 )
             
             # Use focused blink detector
@@ -111,8 +112,9 @@ class LivenessDetection(LivenessInterface):
             return LivenessResult(
                 is_live=False,
                 confidence=0.0,
-                test_type=LivenessTestType.BLINK,
-                details={"error": str(e)}
+                test_type=LivenessTestType.BLINK_DETECTION,
+                details={"error": str(e)},
+                processing_time_ms=0.0
             )
     
     def detect_head_movement(self, face_images: List[np.ndarray]) -> LivenessResult:
@@ -405,18 +407,33 @@ class LivenessDetection(LivenessInterface):
     def _extract_landmarks(self, face_image: np.ndarray) -> Optional[List]:
         """Extract face landmarks using MediaPipe"""
         try:
+            logger.debug(f"Extracting landmarks from image: shape={face_image.shape}, dtype={face_image.dtype}")
+            
+            # Use the working approach: no resizing, just convert to RGB
+            # Convert BGR to RGB (MediaPipe expects RGB)
+            rgb_image = cv2.cvtColor(face_image, cv2.COLOR_BGR2RGB)
+            logger.debug(f"Converted to RGB: shape={rgb_image.shape}, dtype={rgb_image.dtype}")
+            
+            # Create a new MediaPipe instance each time with working configuration
             with self.mp_face_mesh.FaceMesh(
-                min_detection_confidence=self.config_manager.get_config('mediapipe')['min_detection_confidence'],
-                min_tracking_confidence=self.config_manager.get_config('mediapipe')['min_tracking_confidence'],
-                max_num_faces=self.config_manager.get_config('mediapipe')['max_num_faces'],
-                refine_landmarks=self.config_manager.get_config('mediapipe')['refine_landmarks']
+                min_detection_confidence=0.3,  # Use working threshold
+                min_tracking_confidence=0.3,   # Use working threshold
+                max_num_faces=1,
+                refine_landmarks=True
             ) as face_mesh:
-                results = face_mesh.process(cv2.cvtColor(face_image, cv2.COLOR_BGR2RGB))
+                logger.debug("MediaPipe FaceMesh instance created")
+                results = face_mesh.process(rgb_image)
+                logger.debug(f"MediaPipe results: {results}")
                 
                 if results.multi_face_landmarks:
+                    logger.debug(f"Face detected with {len(results.multi_face_landmarks[0].landmark)} landmarks")
                     return results.multi_face_landmarks[0].landmark
-                return None
+                else:
+                    logger.debug("No face landmarks detected")
+                    return None
                 
         except Exception as e:
             logger.error(f"Error extracting landmarks: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return None

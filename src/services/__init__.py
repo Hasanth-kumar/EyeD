@@ -73,8 +73,14 @@ class ServiceFactory:
     def get_face_repository(self) -> FaceRepository:
         """Get or create face repository instance"""
         if self._face_repository is None:
-            self._face_repository = FaceRepository()
-            logger.info("Face repository created")
+            try:
+                self._face_repository = FaceRepository()
+                logger.info("Face repository created successfully")
+            except Exception as e:
+                logger.error(f"Failed to create face repository: {e}")
+                raise
+        else:
+            logger.debug("Face repository already exists")
         
         return self._face_repository
     
@@ -105,10 +111,19 @@ class ServiceFactory:
     def get_face_database(self) -> FaceDatabase:
         """Get or create face database instance"""
         if self._face_database is None:
-            self._face_database = FaceDatabase(
-                face_repository=self.get_face_repository()
-            )
-            logger.info("Face database created")
+            try:
+                face_repo = self.get_face_repository()
+                logger.info(f"Face repository obtained: {type(face_repo)}")
+                
+                self._face_database = FaceDatabase(
+                    face_repository=face_repo
+                )
+                logger.info("Face database created successfully")
+            except Exception as e:
+                logger.error(f"Failed to create face database: {e}")
+                raise
+        else:
+            logger.debug("Face database already exists")
         
         return self._face_database
     

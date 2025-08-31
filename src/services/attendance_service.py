@@ -256,32 +256,39 @@ class AttendanceService:
             import pandas as pd
             df = pd.DataFrame(attendance_data)
             
-            # Calculate analytics
-            total_entries = len(df)
-            unique_users = df['ID'].nunique() if 'ID' in df.columns else 0
+            # Calculate analytics - filter out zero confidence entries
+            valid_df = df[df['Confidence'] > 0] if 'Confidence' in df.columns else df
+            total_entries = len(valid_df)
+            unique_users = valid_df['ID'].nunique() if 'ID' in valid_df.columns else 0
             
             # Daily breakdown
             daily_breakdown = {}
-            if 'Date' in df.columns:
-                daily_counts = df.groupby('Date').size()
+            if 'Date' in valid_df.columns:
+                daily_counts = valid_df.groupby('Date').size()
                 daily_breakdown = daily_counts.to_dict()
             
             # User breakdown
             user_breakdown = {}
-            if 'ID' in df.columns:
-                user_counts = df.groupby('ID').size()
+            if 'ID' in valid_df.columns:
+                user_counts = valid_df.groupby('ID').size()
                 user_breakdown = user_counts.to_dict()
             
-            # Quality metrics
+            # Quality metrics - use valid_df which already filters zero confidence
             quality_metrics = {}
-            if 'Confidence' in df.columns:
-                quality_metrics['avg_confidence'] = df['Confidence'].mean()
-                quality_metrics['min_confidence'] = df['Confidence'].min()
-                quality_metrics['max_confidence'] = df['Confidence'].max()
+            if 'Confidence' in valid_df.columns and not valid_df.empty:
+                quality_metrics['avg_confidence'] = valid_df['Confidence'].mean()
+                quality_metrics['min_confidence'] = valid_df['Confidence'].min()
+                quality_metrics['max_confidence'] = valid_df['Confidence'].max()
+            else:
+                quality_metrics['avg_confidence'] = 0.0
+                quality_metrics['min_confidence'] = 0.0
+                quality_metrics['max_confidence'] = 0.0
             
-            if 'Liveness_Verified' in df.columns:
-                liveness_count = df['Liveness_Verified'].sum()
+            if 'Liveness_Verified' in valid_df.columns and not valid_df.empty:
+                liveness_count = valid_df['Liveness_Verified'].sum()
                 quality_metrics['liveness_verification_rate'] = (liveness_count / total_entries * 100) if total_entries > 0 else 0
+            else:
+                quality_metrics['liveness_verification_rate'] = 0.0
             
             return {
                 'period': {
@@ -384,16 +391,16 @@ class AttendanceService:
         """
         try:
             if report_type == "overview":
-                return self.get_attendance_report()
+                return self._get_overview_report()
             elif report_type == "recent_activity":
-                return self.get_recent_activity()
+                return self._get_recent_activity_report()
             elif report_type == "detailed_history":
-                return self.get_attendance_report()
+                return self._get_detailed_history_report()
             elif report_type == "today_count":
-                return self.get_today_attendance_count()
+                return self._get_today_count_report()
             else:
                 logger.warning(f"Unknown report type: {report_type}")
-                return self.get_attendance_report()
+                return self._get_overview_report()
                 
         except Exception as e:
             logger.error(f"Error generating report by type {report_type}: {e}")
@@ -417,11 +424,14 @@ class AttendanceService:
             if analytics_type == "summary":
                 analytics_data = self.get_attendance_analytics(month_ago, today)
                 # Transform to expected format for analytics component
+                avg_confidence = analytics_data.get('quality_metrics', {}).get('avg_confidence', 0.0)
+                success_rate = analytics_data.get('quality_metrics', {}).get('liveness_verification_rate', 0.0)
+                
                 return {
                     'total_attendance': analytics_data.get('total_entries', 0),
                     'unique_users': analytics_data.get('unique_users', 0),
-                    'avg_confidence': analytics_data.get('quality_metrics', {}).get('avg_confidence', 0.0),
-                    'success_rate': analytics_data.get('quality_metrics', {}).get('liveness_verification_rate', 0.0),
+                    'avg_confidence': avg_confidence if avg_confidence > 0 else 0.0,
+                    'success_rate': success_rate if success_rate > 0 else 0.0,
                     'attendance_change': 0,  # Placeholder for now
                     'user_change': 0,  # Placeholder for now
                     'confidence_change': 0,  # Placeholder for now
@@ -515,6 +525,11 @@ class AttendanceService:
                     entry_dict = entry
                 
                 user_name = entry_dict.get('Name', 'Unknown')
+                confidence = entry_dict.get('Confidence', 0.0)
+                
+                # Skip entries with zero confidence (likely test entries)
+                if confidence == 0.0:
+                    continue
                 
                 if user_name not in user_performance:
                     user_performance[user_name] = {
@@ -525,7 +540,7 @@ class AttendanceService:
                     }
                 
                 user_performance[user_name]['attendance_count'] += 1
-                user_performance[user_name]['total_confidence'] += entry_dict.get('Confidence', 0.0)
+                user_performance[user_name]['total_confidence'] += confidence
             
             # Calculate averages
             for user_data in user_performance.values():
@@ -555,6 +570,11 @@ class AttendanceService:
                     entry_dict = entry.to_dict()
                 else:
                     entry_dict = entry
+                
+                # Skip entries with zero confidence (likely test entries)
+                confidence = entry_dict.get('Confidence', 0.0)
+                if confidence == 0.0:
+                    continue
                 
                 # Extract date and time from separate fields
                 date_str = entry_dict.get('Date', '')
@@ -616,35 +636,21 @@ class AttendanceService:
     # BACKWARD COMPATIBILITY METHODS FOR DASHBOARD COMPONENTS
     # ============================================================================
     
-    def get_attendance_report_by_type(self, report_type: str) -> Dict[str, Any]:
-        """Get attendance report by type for dashboard compatibility"""
-        try:
-            if report_type == "overview":
-                return self._get_overview_report()
-            elif report_type == "recent_activity":
-                return self._get_recent_activity_report()
-            elif report_type == "detailed_history":
-                return self._get_detailed_history_report()
-            elif report_type == "today_count":
-                return self._get_today_count_report()
-            else:
-                logger.warning(f"Unknown report type: {report_type}")
-                return self._get_overview_report()
-                
-        except Exception as e:
-            logger.error(f"Error generating report by type {report_type}: {e}")
-            return {}
-    
     def _get_overview_report(self) -> Dict[str, Any]:
         """Generate overview report"""
         try:
             today = datetime.now().date()
             summary = self.attendance_repository.get_attendance_summary(today)
             
+            # Get overall summary (not just today) for better performance metrics
+            overall_summary = self.attendance_repository.get_attendance_summary()
+            
             return {
-                'total_attendance': summary.get('total_entries', 0),
+                'total_attendance': overall_summary.get('total_entries', 0),
                 'today_attendance': summary.get('total_entries', 0),
                 'attendance_rate': 100 if summary.get('total_entries', 0) > 0 else 0,
+                'avg_confidence': overall_summary.get('avg_confidence', 0.0),
+                'success_rate': overall_summary.get('liveness_verification_rate', 0.0),
                 'date': today.isoformat()
             }
         except Exception as e:

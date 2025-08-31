@@ -168,16 +168,26 @@ class AttendanceRepository:
                 'date': target_date.strftime('%Y-%m-%d') if target_date else 'all'
             }
             
-            # Add additional metrics if data exists
+            # Add additional metrics if data exists - filter out zero confidence entries
             if 'Confidence' in df.columns and not df.empty:
-                summary['avg_confidence'] = df['Confidence'].mean()
-                summary['min_confidence'] = df['Confidence'].min()
-                summary['max_confidence'] = df['Confidence'].max()
+                # Filter out zero confidence entries for quality metrics
+                valid_confidence_df = df[df['Confidence'] > 0]
+                if not valid_confidence_df.empty:
+                    summary['avg_confidence'] = valid_confidence_df['Confidence'].mean()
+                    summary['min_confidence'] = valid_confidence_df['Confidence'].min()
+                    summary['max_confidence'] = valid_confidence_df['Confidence'].max()
+                else:
+                    summary['avg_confidence'] = 0.0
+                    summary['min_confidence'] = 0.0
+                    summary['max_confidence'] = 0.0
             
             if 'Liveness_Verified' in df.columns and not df.empty:
-                liveness_count = df['Liveness_Verified'].sum()
+                # Only count liveness verification for entries with valid confidence
+                valid_entries = df[df['Confidence'] > 0] if 'Confidence' in df.columns else df
+                liveness_count = valid_entries['Liveness_Verified'].sum() if not valid_entries.empty else 0
+                valid_total = len(valid_entries) if not valid_entries.empty else 0
                 summary['liveness_verified_count'] = liveness_count
-                summary['liveness_verification_rate'] = (liveness_count / total_entries * 100) if total_entries > 0 else 0
+                summary['liveness_verification_rate'] = (liveness_count / valid_total * 100) if valid_total > 0 else 0
             
             return summary
             
