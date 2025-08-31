@@ -8,6 +8,7 @@ following the Single-Responsibility Principle.
 from datetime import datetime, date
 from typing import List, Optional, Dict, Any, Tuple
 import logging
+import pandas as pd
 
 from ..repositories.attendance_repository import AttendanceRepository
 from ..interfaces.attendance_manager_interface import AttendanceManagerInterface
@@ -414,14 +415,25 @@ class AttendanceService:
             month_ago = today - timedelta(days=30)
             
             if analytics_type == "summary":
-                return self.get_attendance_analytics(month_ago, today)
+                analytics_data = self.get_attendance_analytics(month_ago, today)
+                # Transform to expected format for analytics component
+                return {
+                    'total_attendance': analytics_data.get('total_entries', 0),
+                    'unique_users': analytics_data.get('unique_users', 0),
+                    'avg_confidence': analytics_data.get('quality_metrics', {}).get('avg_confidence', 0.0),
+                    'success_rate': analytics_data.get('quality_metrics', {}).get('liveness_verification_rate', 0.0),
+                    'attendance_change': 0,  # Placeholder for now
+                    'user_change': 0,  # Placeholder for now
+                    'confidence_change': 0,  # Placeholder for now
+                    'success_change': 0  # Placeholder for now
+                }
             elif analytics_type == "user_performance":
                 return self.get_user_performance_analytics()
             elif analytics_type == "trends":
                 return self.get_trend_analytics()
             else:
                 logger.warning(f"Unknown analytics type: {analytics_type}")
-                return self.get_attendance_analytics(month_ago, today)
+                return {}
                 
         except Exception as e:
             logger.error(f"Error generating analytics by type {analytics_type}: {e}")
@@ -502,7 +514,7 @@ class AttendanceService:
                 else:
                     entry_dict = entry
                 
-                user_name = entry_dict.get('user_name', 'Unknown')
+                user_name = entry_dict.get('Name', 'Unknown')
                 
                 if user_name not in user_performance:
                     user_performance[user_name] = {
@@ -513,7 +525,7 @@ class AttendanceService:
                     }
                 
                 user_performance[user_name]['attendance_count'] += 1
-                user_performance[user_name]['total_confidence'] += entry_dict.get('confidence', 0.0)
+                user_performance[user_name]['total_confidence'] += entry_dict.get('Confidence', 0.0)
             
             # Calculate averages
             for user_data in user_performance.values():
@@ -536,6 +548,7 @@ class AttendanceService:
             
             # Group by date and calculate daily trends
             daily_trends = {}
+            hourly_trends = {}
             
             for entry in attendance_data:
                 if hasattr(entry, 'to_dict'):
@@ -543,42 +556,55 @@ class AttendanceService:
                 else:
                     entry_dict = entry
                 
-                # Extract date from timestamp
-                timestamp = entry_dict.get('timestamp', '')
-                if timestamp:
-                    if isinstance(timestamp, str):
-                        try:
-                            date_obj = datetime.fromisoformat(timestamp.replace('Z', '+00:00')).date()
-                        except:
-                            continue
-                    else:
-                        date_obj = timestamp.date()
-                    
-                    date_str = date_obj.isoformat()
-                    
-                    if date_str not in daily_trends:
-                        daily_trends[date_str] = {
-                            'date': date_str,
-                            'attendance_count': 0,
-                            'hour': []
-                        }
-                    
-                    daily_trends[date_str]['attendance_count'] += 1
-                    
-                    # Extract hour for hourly analysis
-                    if timestamp:
-                        if isinstance(timestamp, str):
-                            try:
-                                hour = datetime.fromisoformat(timestamp.replace('Z', '+00:00')).hour
-                            except:
-                                hour = 0
-                        else:
-                            hour = timestamp.hour
-                        daily_trends[date_str]['hour'].append(hour)
+                # Extract date and time from separate fields
+                date_str = entry_dict.get('Date', '')
+                time_str = entry_dict.get('Time', '')
+                
+                if date_str and time_str:
+                    try:
+                        # Parse date
+                        date_obj = pd.to_datetime(date_str).date()
+                        date_str = date_obj.isoformat()
+                        
+                        # Parse time to get hour
+                        time_obj = pd.to_datetime(time_str)
+                        hour = time_obj.hour
+                        
+                        # Daily trends
+                        if date_str not in daily_trends:
+                            daily_trends[date_str] = {
+                                'date': date_str,
+                                'attendance_count': 0,
+                                'late_arrivals': 0
+                            }
+                        
+                        daily_trends[date_str]['attendance_count'] += 1
+                        
+                        # Count late arrivals (after 9 AM)
+                        if hour > 9:
+                            daily_trends[date_str]['late_arrivals'] += 1
+                        
+                        # Hourly trends
+                        if hour not in hourly_trends:
+                            hourly_trends[hour] = {
+                                'hour': hour,
+                                'attendance_count': 0
+                            }
+                        hourly_trends[hour]['attendance_count'] += 1
+                        
+                    except Exception as e:
+                        logger.warning(f"Failed to parse date/time for entry: {e}")
+                        continue
             
-            # Convert to list and sort by date
+            # Combine daily and hourly trends
             trends_list = list(daily_trends.values())
             trends_list.sort(key=lambda x: x['date'])
+            
+            # Add hourly data to the first entry for compatibility
+            if trends_list:
+                hourly_list = list(hourly_trends.values())
+                hourly_list.sort(key=lambda x: x['hour'])
+                trends_list.extend(hourly_list)
             
             return trends_list
             
