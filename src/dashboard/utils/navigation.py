@@ -8,9 +8,14 @@ from typing import Optional
 import os
 
 def get_current_page() -> str:
-    """Determine the current page based on the script path"""
+    """Determine the current page based on the script path or session state"""
     try:
-        # Get the current script path from Streamlit
+        # First, check session state for current page (most reliable)
+        page_name = st.session_state.get('current_page', '')
+        if page_name:
+            return page_name.lower()
+        
+        # Fallback: Get the current script path from Streamlit
         import inspect
         frame = inspect.currentframe()
         while frame:
@@ -35,11 +40,6 @@ def get_current_page() -> str:
             elif 'app.py' in filename:
                 return "home"
             frame = frame.f_back
-        
-        # Fallback: check session state for page info
-        page_name = st.session_state.get('current_page', '')
-        if page_name:
-            return page_name.lower()
         
         return "home"  # Default to home
     except Exception:

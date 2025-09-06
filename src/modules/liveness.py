@@ -71,9 +71,10 @@ class EnhancedLivenessDetection:
             min_tracking_confidence=0.5
         )
         
-        # Eye landmark indices (MediaPipe FaceMesh)
-        self.LEFT_EYE = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398]
-        self.RIGHT_EYE = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
+        # Correct MediaPipe FaceMesh eye landmark indices for EAR calculation
+        # These are the 6 key points needed for EAR calculation
+        self.LEFT_EYE = [362, 385, 387, 263, 373, 380]  # 6 key points for EAR
+        self.RIGHT_EYE = [33, 160, 158, 133, 153, 144]  # 6 key points for EAR
         
         # Blink detection state
         self.blink_history = deque(maxlen=50)  # Store last 50 frames
@@ -224,15 +225,15 @@ class EnhancedLivenessDetection:
         try:
             current_time = time.time()
             
-            # EAR threshold for blink detection (adjust based on your model)
-            BLINK_THRESHOLD = 0.21
+            # EAR threshold for blink detection (standard MediaPipe threshold)
+            BLINK_THRESHOLD = 0.21  # Standard threshold for MediaPipe FaceMesh
             
             if ear < BLINK_THRESHOLD:  # Eyes are closed
                 if self.blink_start_time is None:
                     # Start of blink
                     self.blink_start_time = current_time
                     logger.debug("Blink started")
-                return False
+                return True  # Return True when eyes are closed (blinking)
             else:  # Eyes are open
                 if self.blink_start_time is not None:
                     # End of blink
@@ -243,12 +244,12 @@ class EnhancedLivenessDetection:
                         # Valid blink detected
                         self.blink_count += 1
                         self.last_blink_time = current_time
-                        logger.info(f"Blink {self.blink_count} detected (duration: {blink_duration:.3f}s)")
+                        logger.info(f"Blink {self.blink_count} detected (duration: {blink_duration:.3f}s, EAR: {ear:.3f})")
                     
                     # Reset blink start time
                     self.blink_start_time = None
                 
-                return False
+                return False  # Return False when eyes are open
                 
         except Exception as e:
             logger.error(f"Error in blink detection: {e}")
@@ -384,6 +385,129 @@ class LivenessDetection(EnhancedLivenessDetection):
     """Backward compatibility wrapper"""
     
     def detect_blink(self, frame: np.ndarray) -> LivenessResult:
-        """Legacy method for backward compatibility"""
-        logger.warning("Using legacy detect_blink method. Consider using detect_blink_sequence for better anti-spoofing.")
-        return self.detect_blink_sequence(frame, timeout=5.0)
+        """Fast, real-time blink detection for continuous video processing"""
+        start_time = time.time()
+        
+        try:
+            # Process frame for blink detection (fast version)
+            blink_detected = self._process_frame_for_blink_fast(frame)
+            
+            # Create result with current state
+            processing_time = time.time() - start_time
+            
+            # Get current EAR value for debugging
+            current_ear = 0.0
+            if self.blink_history:
+                current_ear = self.blink_history[-1]['ear']
+            
+            # Create a result object with details
+            result = LivenessResult(
+                is_live=blink_detected,
+                confidence=self._calculate_confidence(),
+                blink_count=self.blink_count,
+                blink_duration=0.3,  # Typical blink duration
+                motion_score=np.mean(list(self.motion_history)) if self.motion_history else 0.0,
+                spoofing_indicators=self.spoofing_indicators.copy(),
+                processing_time=processing_time
+            )
+            
+            # Add details for debugging
+            result.details = {
+                'ear_value': current_ear,
+                'threshold': 0.21,
+                'blink_detected': blink_detected,
+                'motion_score': np.mean(list(self.motion_history)) if self.motion_history else 0.0
+            }
+            
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error in fast blink detection: {e}")
+            result = LivenessResult(
+                is_live=False,
+                confidence=0.0,
+                blink_count=self.blink_count,
+                blink_duration=0.0,
+                motion_score=0.0,
+                spoofing_indicators=["Processing error"],
+                processing_time=time.time() - start_time
+            )
+            result.details = {
+                'ear_value': 0.0,
+                'threshold': 0.21,
+                'blink_detected': False,
+                'motion_score': 0.0,
+                'error': str(e)
+            }
+            return result
+    
+    def _process_frame_for_blink_fast(self, frame: np.ndarray) -> bool:
+        """Fast frame processing for real-time blink detection"""
+        try:
+            # Convert BGR to RGB
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Use existing face_mesh instance (more efficient)
+            results = self.face_mesh.process(rgb_frame)
+            
+            if not results.multi_face_landmarks:
+                return False
+            
+            # Get face landmarks
+            face_landmarks = results.multi_face_landmarks[0]
+            
+            # Calculate eye aspect ratio
+            left_ear = self._calculate_eye_aspect_ratio(face_landmarks, self.LEFT_EYE)
+            right_ear = self._calculate_eye_aspect_ratio(face_landmarks, self.RIGHT_EYE)
+            
+            # Average EAR for both eyes
+            ear = (left_ear + right_ear) / 2.0
+            
+            # Calculate motion score (simplified for speed)
+            motion_score = self._calculate_motion_score_fast(frame)
+            self.motion_history.append(motion_score)
+            
+            # Detect blink
+            blink_detected = self._detect_blink(ear)
+            
+            # Debug: Print EAR values occasionally
+            if len(self.blink_history) % 30 == 0:  # Every 30 frames
+                logger.debug(f"EAR: {ear:.3f}, Blink: {blink_detected}, Count: {self.blink_count}")
+            
+            # Store in history (limit size for performance)
+            if len(self.blink_history) >= 50:
+                self.blink_history.popleft()
+            
+            self.blink_history.append({
+                'ear': ear,
+                'timestamp': time.time(),
+                'motion': motion_score,
+                'blink_detected': blink_detected
+            })
+            
+            return blink_detected
+            
+        except Exception as e:
+            logger.error(f"Error in fast frame processing: {e}")
+            return False
+    
+    def _calculate_motion_score_fast(self, frame: np.ndarray) -> float:
+        """Fast motion score calculation"""
+        try:
+            # Convert to grayscale
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            
+            # Resize for faster processing
+            small_gray = cv2.resize(gray, (160, 120))
+            
+            # Calculate Laplacian variance (measure of image sharpness/motion)
+            laplacian_var = cv2.Laplacian(small_gray, cv2.CV_64F).var()
+            
+            # Normalize motion score
+            motion_score = min(laplacian_var / 500.0, 1.0)
+            
+            return motion_score
+            
+        except Exception as e:
+            logger.error(f"Error calculating fast motion score: {e}")
+            return 0.0

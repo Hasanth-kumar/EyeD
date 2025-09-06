@@ -18,7 +18,7 @@ from ..repositories.user_repository import UserRepository
 from ..repositories.face_repository import FaceRepository
 from ..modules.attendance import AttendanceManager
 from ..modules.recognition import FaceRecognition
-from ..modules.liveness import LivenessDetection
+from ..modules.liveness_detection.liveness_detector import LivenessDetection
 from ..modules.face_db import FaceDatabase
 
 logger = logging.getLogger(__name__)
@@ -107,6 +107,15 @@ class ServiceFactory:
             logger.info("Liveness detection system created")
         
         return self._liveness_system
+    
+    def get_liveness_service(self) -> 'LiveBlinkService':
+        """Get or create liveness service instance"""
+        if not hasattr(self, '_liveness_service') or self._liveness_service is None:
+            from .live_blink_service import LiveBlinkService
+            self._liveness_service = LiveBlinkService()
+            logger.info("Live blink service created")
+        
+        return self._liveness_service
     
     def get_face_database(self) -> FaceDatabase:
         """Get or create face database instance"""
@@ -280,6 +289,11 @@ def get_recognition_system() -> FaceRecognition:
 def get_liveness_system() -> LivenessDetection:
     """Get liveness detection system instance"""
     return service_factory.get_liveness_system()
+
+
+def get_liveness_service() -> 'LiveBlinkService':
+    """Get liveness service instance"""
+    return service_factory.get_liveness_service()
 
 
 def get_face_database() -> FaceDatabase:

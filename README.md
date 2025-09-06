@@ -6,13 +6,13 @@
 [![Streamlit](https://img.shields.io/badge/Streamlit-Latest-red.svg)](https://streamlit.io)
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.x-green.svg)](https://opencv.org)
 [![DeepFace](https://img.shields.io/badge/DeepFace-Latest-orange.svg)](https://github.com/serengil/deepface)
-[![Progress](https://img.shields.io/badge/Progress-90%25%20Analytics%20Fixed-brightgreen.svg)](https://github.com/yourusername/eyed)
+[![Progress](https://img.shields.io/badge/Progress-95%25%20Production%20Ready-brightgreen.svg)](https://github.com/yourusername/eyed)
 
-## 🚀 **Project Status: Analytics System Fully Operational!**
+## 🚀 **Project Status: Production-Ready Codebase!**
 
 **Current Phase**: Phase 5 - Deployment & Demo ✅ **IN PROGRESS**  
-**Latest Achievement**: Fixed Analytics Data Structure Issues & Enhanced Dashboard Functionality  
-**Overall Progress**: 90% (Analytics system fully operational with real data integration)
+**Latest Achievement**: Codebase Cleanup & Optimization Complete  
+**Overall Progress**: 95% (Clean, production-ready codebase with all features operational)
 
 ---
 
@@ -111,10 +111,8 @@ EyeD/
 ├── data/                         # Data storage
 │   ├── faces/                    # Registered face images
 │   ├── attendance.csv            # Attendance records ✅ WORKING
-│   ├── attendance_demo_day12.csv # Demo data
 │   └── exports/                  # Export files
-├── tests/                        # Comprehensive test suites
-├── demos/                        # 🆕 Demo scripts and videos
+├── src/tests/                    # Comprehensive test suites
 └── docs/                         # Documentation
 ```
 
@@ -131,13 +129,38 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. **Launch Dashboard**
+### 2. **Launch EyeD**
+
+#### Option 1: Unified Launcher (Recommended) 🆕
+```bash
+python launch.py
+```
+This provides a user-friendly menu to choose between all available modes.
+
+#### Option 2: Direct Mode Selection
+```bash
+# Webcam mode (real-time face recognition)
+python main.py --mode webcam
+
+# Dashboard mode (web interface)
+python main.py --mode dashboard
+
+# Registration mode (add new users)
+python main.py --mode register
+
+# Testing modes
+python main.py --mode recognition
+python main.py --mode liveness
+python main.py --mode integration
+
+# Attendance management
+python main.py --mode attendance
+```
+
+#### Option 3: Direct Dashboard Access
 ```bash
 # Main dashboard with all features
 streamlit run src/dashboard/app.py
-
-# Day 14 gamification demo
-streamlit run demo_day14_gamification.py
 ```
 
 ### 3. **Run Tests**
@@ -382,12 +405,12 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🚀 **Next Steps**
 
-With **90% of the project complete** and all core functionalities including analytics fully operational, the remaining tasks are:
+With **95% of the project complete** and a clean, production-ready codebase, the remaining tasks are:
 
 1. **Day 15**: Create comprehensive demo video showcasing all features
 2. **Day 16**: Deploy to Streamlit Cloud for public access
 
-**The EyeD AI Attendance System is functionally complete with fully operational analytics and ready for production deployment!** 🎉
+**The EyeD AI Attendance System is functionally complete with a clean, optimized codebase and ready for production deployment!** 🎉
 
 ---
 

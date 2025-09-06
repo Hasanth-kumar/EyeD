@@ -49,12 +49,12 @@ def initialize_systems():
     """Initialize face recognition, liveness detection, and attendance systems"""
     try:
         from src.modules.recognition import FaceRecognition
-        from src.modules.liveness import EnhancedLivenessDetection
+        from src.modules.liveness import LivenessDetection
         from src.modules.attendance import AttendanceManager
         
         # Initialize systems
         recognition = FaceRecognition(confidence_threshold=0.1, use_mediapipe=True)
-        liveness = EnhancedLivenessDetection(min_blinks=2, blink_timeout=15.0)
+        liveness = LivenessDetection()  # New modular system doesn't need parameters
         attendance_manager = AttendanceManager()
         
         # Load known faces
@@ -388,14 +388,428 @@ def handle_face_recognition_step(recognition, confidence_threshold):
         st.rerun()
         return False
 
+def run_streamlit_compatible_blink_session(liveness):
+    """Run a Streamlit-compatible blink detection session"""
+    try:
+        # Initialize session state if not already done
+        if 'blink_counter_start_time' not in st.session_state:
+            st.session_state.blink_counter_start_time = time.time()
+        if 'blink_count' not in st.session_state:
+            st.session_state.blink_count = 0
+        if 'blink_counter_camera_cap' not in st.session_state:
+            st.session_state.blink_counter_camera_cap = None
+        if 'last_blink_time' not in st.session_state:
+            st.session_state.last_blink_time = None
+        
+        # Initialize camera if not already done
+        if st.session_state.blink_counter_camera_cap is None:
+            try:
+                st.session_state.blink_counter_camera_cap = cv2.VideoCapture(0)
+                if not st.session_state.blink_counter_camera_cap.isOpened():
+                    st.error("❌ Failed to open camera. Please check camera permissions.")
+                    st.session_state.blink_counter_active = False
+                    return False
+                else:
+                    st.success("✅ Camera initialized successfully")
+                    # Set camera properties
+                    try:
+                        st.session_state.blink_counter_camera_cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+                        st.session_state.blink_counter_camera_cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+                        st.session_state.blink_counter_camera_cap.set(cv2.CAP_PROP_FPS, 30)
+                    except Exception as prop_error:
+                        st.warning(f"⚠️ Some camera properties could not be set: {prop_error}")
+            except Exception as e:
+                st.error(f"❌ Camera initialization error: {e}")
+                st.session_state.blink_counter_active = False
+                return False
+        
+        # Calculate elapsed time
+        elapsed_time = time.time() - st.session_state.blink_counter_start_time
+        remaining_time = max(0, 30.0 - elapsed_time)  # 30 seconds timer
+        progress = min(100.0, (elapsed_time / 30.0) * 100)
+        
+        # Read frame from camera
+        ret, frame = st.session_state.blink_counter_camera_cap.read()
+        if not ret:
+            st.error("❌ Failed to read from camera")
+            st.session_state.blink_counter_active = False
+            if st.session_state.blink_counter_camera_cap:
+                st.session_state.blink_counter_camera_cap.release()
+                st.session_state.blink_counter_camera_cap = None
+            return False
+    
+        # Process frame for blink detection
+        current_ear = 0.0
+        current_status = "EYES OPEN"
+        blink_detected_this_frame = False
+        
+        try:
+            liveness_result = liveness.detect_blink(frame)
+            
+            # Get EAR value for debugging - try multiple sources
+            current_ear = 0.0
+            current_status = "EYES OPEN"
+            
+            # Method 1: Try to get from details
+            if hasattr(liveness_result, 'details') and liveness_result.details:
+                current_ear = liveness_result.details.get('ear_value', 0.0)
+                current_status = "BLINKING" if liveness_result.is_live else "EYES OPEN"
+            # Method 2: Try to get from blink history
+            elif hasattr(liveness, 'blink_history') and liveness.blink_history:
+                current_ear = liveness.blink_history[-1]['ear']
+                current_status = "BLINKING" if liveness_result.is_live else "EYES OPEN"
+            # Method 3: Calculate EAR directly from the frame
+            else:
+                # Direct EAR calculation as fallback
+                try:
+                    import mediapipe as mp
+                    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    results = liveness.face_mesh.process(rgb_frame)
+                    if results.multi_face_landmarks:
+                        face_landmarks = results.multi_face_landmarks[0]
+                        left_ear = liveness._calculate_eye_aspect_ratio(face_landmarks, liveness.LEFT_EYE)
+                        right_ear = liveness._calculate_eye_aspect_ratio(face_landmarks, liveness.RIGHT_EYE)
+                        current_ear = (left_ear + right_ear) / 2.0
+                        # Use EAR threshold for status determination
+                        current_status = "BLINKING" if current_ear < 0.21 else "EYES OPEN"
+                    else:
+                        current_ear = 0.0
+                        current_status = "NO FACE DETECTED"
+                except Exception as calc_error:
+                    st.warning(f"⚠️ EAR calculation error: {calc_error}")
+                    current_ear = 0.0
+                    current_status = "ERROR"
+            
+            # Check if a new blink was detected
+            # Use multiple methods to detect blinks
+            blink_detected = False
+            
+            # Method 1: Check liveness_result.is_live (when eyes are closed)
+            if liveness_result.is_live:
+                blink_detected = True
+            
+            # Method 2: Check EAR threshold directly
+            elif current_ear < 0.21 and current_ear > 0.0:
+                blink_detected = True
+            
+            # Method 3: Check blink history for recent blink detection
+            elif (hasattr(liveness, 'blink_history') and liveness.blink_history and 
+                  liveness.blink_history[-1].get('blink_detected', False)):
+                blink_detected = True
+            
+            # Update blink count if blink detected
+            if blink_detected:
+                current_time = time.time()
+                # Avoid counting the same blink multiple times (500ms cooldown)
+                if (st.session_state.last_blink_time is None or 
+                    current_time - st.session_state.last_blink_time > 0.5):
+                    st.session_state.blink_count += 1
+                    st.session_state.last_blink_time = current_time
+                    blink_detected_this_frame = True
+                    st.success(f"👁️ Blink {st.session_state.blink_count} detected! Total: {st.session_state.blink_count}")
+            
+            # Also sync with liveness module blink count
+            if liveness_result.blink_count > st.session_state.blink_count:
+                st.session_state.blink_count = liveness_result.blink_count
+                    
+        except Exception as e:
+            st.warning(f"⚠️ Blink detection error: {e}")
+        
+        # Add visual overlays to the frame
+        frame_with_overlays = add_enhanced_visual_overlays_to_frame(
+            frame, elapsed_time, remaining_time, st.session_state.blink_count, current_ear, current_status
+        )
+        
+        # Display the camera feed with live updates
+        st.image(frame_with_overlays, channels="BGR", use_container_width=True, caption=f"LIVE CAMERA - EAR: {current_ear:.3f} - {current_status}")
+        
+        # Debug information
+        with st.expander("🔍 Debug Information", expanded=True):
+            st.write(f"**EAR Value**: {current_ear:.3f}")
+            st.write(f"**Status**: {current_status}")
+            st.write(f"**Liveness Result**: {liveness_result.is_live}")
+            st.write(f"**Blink Count (Liveness)**: {liveness_result.blink_count}")
+            st.write(f"**Blink Count (Session)**: {st.session_state.blink_count}")
+            st.write(f"**Confidence**: {liveness_result.confidence:.3f}")
+            st.write(f"**Processing Time**: {liveness_result.processing_time:.3f}s")
+            
+            # Show which method was used for EAR calculation
+            if hasattr(liveness_result, 'details') and liveness_result.details:
+                st.write("**EAR Source**: Method 1 (Details)")
+                st.write(f"**Details**: {liveness_result.details}")
+            elif hasattr(liveness, 'blink_history') and liveness.blink_history:
+                st.write("**EAR Source**: Method 2 (Blink History)")
+            else:
+                st.write("**EAR Source**: Method 3 (Direct Calculation)")
+            
+            # Show blink detection methods
+            st.write("**Blink Detection Methods**:")
+            st.write(f"- Method 1 (liveness_result.is_live): {liveness_result.is_live}")
+            st.write(f"- Method 2 (EAR < 0.21): {current_ear < 0.21 and current_ear > 0.0}")
+            if hasattr(liveness, 'blink_history') and liveness.blink_history:
+                latest_blink = liveness.blink_history[-1].get('blink_detected', False)
+                st.write(f"- Method 3 (blink_history): {latest_blink}")
+            else:
+                st.write("- Method 3 (blink_history): Not available")
+            
+            # Show blink history if available
+            if hasattr(liveness, 'blink_history') and liveness.blink_history:
+                st.write(f"**Blink History Length**: {len(liveness.blink_history)}")
+                if liveness.blink_history:
+                    latest = liveness.blink_history[-1]
+                    st.write(f"**Latest History**: EAR={latest.get('ear', 0):.3f}, Blink={latest.get('blink_detected', False)}")
+            else:
+                st.write("**Blink History**: Not available")
+            
+            # Show face mesh status
+            if hasattr(liveness, 'face_mesh'):
+                st.write("**Face Mesh**: Available")
+            else:
+                st.write("**Face Mesh**: Not available")
+        
+        # Display status
+        col1, col2, col3 = st.columns([1, 2, 1])
+        
+        with col1:
+            st.metric("⏱️ Time Left", f"{remaining_time:.1f}s")
+        
+        with col2:
+            # Color coding based on progress
+            if st.session_state.blink_count >= 3:
+                color = "#28a745"  # Green - success
+                status_text = "✅ SUCCESS!"
+            elif st.session_state.blink_count >= 2:
+                color = "#ffc107"  # Yellow - almost there
+                status_text = "🟡 Almost there!"
+            elif st.session_state.blink_count >= 1:
+                color = "#17a2b8"  # Blue - good progress
+                status_text = "🔵 Good progress!"
+            else:
+                color = "#dc3545"  # Red - need blinks
+                status_text = "🔴 Blink naturally!"
+            
+            st.markdown(f"""
+            <div style="text-align: center; padding: 20px; background-color: #f0f2f6; border-radius: 10px; margin: 10px 0;">
+                <h1 style="color: {color}; margin: 0;">👁️ BLINKS: {st.session_state.blink_count}</h1>
+                <p style="margin: 5px 0; color: #666;">Target: 3 blinks in 30 seconds</p>
+                <p style="margin: 5px 0; color: #888; font-size: 12px;">EAR: {current_ear:.3f} | Status: {current_status}</p>
+                <p style="margin: 5px 0; color: {color}; font-weight: bold;">{status_text}</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            st.metric("📊 Progress", f"{progress:.1f}%")
+        
+        # Progress bar
+        st.progress(min(1.0, progress / 100))
+        
+        # Check if we've reached 3 blinks (success condition)
+        if st.session_state.blink_count >= 3:
+            st.session_state.blink_counter_active = False
+            
+            st.success(f"""
+            ✅ **Liveness Verification Successful!**
+            
+            **Session Results:**
+            - **Blinks Counted**: {st.session_state.blink_count}
+            - **Session Duration**: {elapsed_time:.1f} seconds
+            - **Success**: ✅ Verified (3 blinks detected)
+            """)
+            
+            # Create a mock liveness result for compatibility
+            class MockLivenessResult:
+                def __init__(self, blink_count, confidence=0.9):
+                    self.is_live = True
+                    self.confidence = confidence
+                    self.blink_count = blink_count
+                    self.details = {'blink_count': blink_count}
+            
+            st.session_state.liveness_result = MockLivenessResult(st.session_state.blink_count)
+            st.session_state.real_time_step = 'attendance_logging'
+            
+            # Clean up camera
+            if st.session_state.blink_counter_camera_cap:
+                st.session_state.blink_counter_camera_cap.release()
+                st.session_state.blink_counter_camera_cap = None
+            
+            st.rerun()
+            return True
+        
+        # Check if 30 seconds have passed (timeout condition)
+        if elapsed_time >= 30.0:
+            st.session_state.blink_counter_active = False
+            
+            if st.session_state.blink_count >= 3:
+                st.success(f"""
+                ✅ **Liveness Verification Successful!**
+                
+                **Session Results:**
+                - **Blinks Counted**: {st.session_state.blink_count}
+                - **Session Duration**: 30.0 seconds
+                - **Success**: ✅ Verified (3+ blinks detected)
+                """)
+                
+                # Create a mock liveness result for compatibility
+                class MockLivenessResult:
+                    def __init__(self, blink_count, confidence=0.9):
+                        self.is_live = True
+                        self.confidence = confidence
+                        self.blink_count = blink_count
+                        self.details = {'blink_count': blink_count}
+                
+                st.session_state.liveness_result = MockLivenessResult(st.session_state.blink_count)
+                st.session_state.real_time_step = 'attendance_logging'
+                
+            else:
+                st.error(f"""
+                ❌ **Liveness Verification Failed**
+                
+                **Session Results:**
+                - **Blinks Counted**: {st.session_state.blink_count}
+                - **Session Duration**: 30.0 seconds
+                - **Error**: Insufficient blinks detected (minimum 3 required)
+                
+                **Please try again and blink naturally during the countdown.**
+                """)
+            
+            # Clean up camera
+            if st.session_state.blink_counter_camera_cap:
+                st.session_state.blink_counter_camera_cap.release()
+                st.session_state.blink_counter_camera_cap = None
+            
+            st.rerun()
+            return True
+        
+        # Continue the session by rerunning with a small delay
+        time.sleep(0.1)  # 100ms delay for smoother updates
+        st.rerun()
+        
+        return False
+        
+    except Exception as e:
+        st.error(f"❌ Error in Streamlit-compatible blink session: {e}")
+        st.session_state.blink_counter_active = False
+        if st.session_state.blink_counter_camera_cap:
+            st.session_state.blink_counter_camera_cap.release()
+            st.session_state.blink_counter_camera_cap = None
+        return False
+    
+def calculate_ear(landmarks, eye_indices):
+    """Calculate Eye Aspect Ratio (EAR) for blink detection"""
+    try:
+        # Extract the 6 key eye landmark coordinates
+        eye_points = []
+        for idx in eye_indices:
+            if idx < len(landmarks.landmark):
+                landmark = landmarks.landmark[idx]
+                x, y = landmark.x, landmark.y
+                eye_points.append((x, y))
+        
+        if len(eye_points) < 6:
+            return 0.0
+        
+        # Calculate vertical distances (A and B)
+        # A = distance between points 1 and 5
+        A = np.linalg.norm(np.array(eye_points[1]) - np.array(eye_points[5]))
+        # B = distance between points 2 and 4  
+        B = np.linalg.norm(np.array(eye_points[2]) - np.array(eye_points[4]))
+        
+        # Calculate horizontal distance (C)
+        # C = distance between points 0 and 3
+        C = np.linalg.norm(np.array(eye_points[0]) - np.array(eye_points[3]))
+        
+        # Calculate EAR: (A + B) / (2.0 * C)
+        if C > 0:
+            ear = (A + B) / (2.0 * C)
+            return ear
+        else:
+            return 0.0
+            
+    except Exception as e:
+        return 0.0
+
+def add_enhanced_visual_overlays_to_frame(frame, elapsed_time, remaining_time, blink_count, current_ear=0.0, current_status="EYES OPEN"):
+    """Add enhanced visual overlays to the camera frame for 30s timer and 3-blink requirement"""
+    try:
+        # Create a copy of the frame
+        frame_with_overlays = frame.copy()
+        
+        # Add timer overlay
+        timer_text = f"Time: {remaining_time:.1f}s"
+        cv2.putText(frame_with_overlays, timer_text, (10, 30), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2)
+        
+        # Add blink count overlay (larger and more prominent)
+        blink_text = f"BLINKS: {blink_count}"
+        cv2.putText(frame_with_overlays, blink_text, (10, 70), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 255, 255), 3)
+        
+        # Add EAR value and status
+        ear_text = f"EAR: {current_ear:.3f} ({current_status})"
+        ear_color = (0, 0, 255) if current_status == "BLINKING" else (0, 255, 0)
+        cv2.putText(frame_with_overlays, ear_text, (10, 110), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, ear_color, 2)
+        
+        # Add target requirement (3 blinks)
+        target_text = "TARGET: 3 blinks"
+        cv2.putText(frame_with_overlays, target_text, (10, 150), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+        
+        # Add progress bar overlay (30 seconds)
+        bar_width = 300
+        bar_height = 20
+        bar_x = 10
+        bar_y = 170
+        
+        # Background bar
+        cv2.rectangle(frame_with_overlays, (bar_x, bar_y), 
+                     (bar_x + bar_width, bar_y + bar_height), (50, 50, 50), -1)
+        
+        # Progress bar (30 seconds)
+        progress_width = int((elapsed_time / 30.0) * bar_width)
+        cv2.rectangle(frame_with_overlays, (bar_x, bar_y), 
+                     (bar_x + progress_width, bar_y + bar_height), (0, 255, 0), -1)
+        
+        # Add status indicator with color coding
+        if blink_count >= 3:
+            status_text = "✅ SUCCESS!"
+            color = (0, 255, 0)  # Green
+        elif blink_count >= 2:
+            status_text = "🟡 Almost there!"
+            color = (0, 255, 255)  # Yellow
+        elif blink_count >= 1:
+            status_text = "🔵 Good progress!"
+            color = (255, 255, 0)  # Cyan
+        else:
+            status_text = "🔴 Blink naturally!"
+            color = (0, 165, 255)  # Orange
+        
+        cv2.putText(frame_with_overlays, status_text, (10, 210), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
+        
+        # Add countdown indicator
+        if remaining_time <= 5.0:
+            countdown_text = f"COUNTDOWN: {remaining_time:.1f}s"
+            cv2.putText(frame_with_overlays, countdown_text, (10, 250), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+        
+        return frame_with_overlays
+        
+    except Exception as e:
+        st.error(f"Error adding enhanced visual overlays: {e}")
+        return frame
+
 def handle_liveness_verification_step(liveness):
     """Handle Step 3**: Liveness Verification - Single Responsibility: Liveness Only"""
-    st.info("👁️ **Step 3**: Liveness Verification - Blink naturally in live camera")
+    st.info("👁️ **Step 3**: Liveness Verification - Live Blink Counter (30 seconds)")
+    st.warning("🎯 **Requirements**: Blink 3 times naturally within 30 seconds. Camera will stop automatically after 3 blinks or 30 seconds!")
     
     # Debug: Show what we have
     st.write("🔍 **Debug Info:**")
     st.write(f"User Recognized: {st.session_state.user_recognized}")
     st.write(f"Webcam Active: {st.session_state.webcam_active}")
+    st.write(f"Blink Counter Active: {st.session_state.get('blink_counter_active', False)}")
+    st.write(f"Blink Count: {st.session_state.get('blink_count', 0)}")
     
     if not st.session_state.user_recognized:
         st.error("❌ No user recognized. Please go back to recognition step.")
@@ -403,111 +817,65 @@ def handle_liveness_verification_step(liveness):
         st.rerun()
         return False
     
-    # Ensure webcam is active for liveness verification
-    st.session_state.webcam_active = True
+    # Show instructions
+    st.info("""
+    **🎯 Live Blink Counter Instructions:**
+    1. Look directly at the camera
+    2. Blink naturally during the 30-second countdown
+    3. The system will count your blinks in real-time
+    4. Exactly 3 blinks are required for verification
+    5. Camera will stop automatically after 3 blinks or 30 seconds
+    """)
     
-    # Show live liveness camera
-    st.info("👁️ **Live Liveness Check** - Blink naturally to verify")
+    # Initialize session state
+    if 'blink_session_id' not in st.session_state:
+        st.session_state.blink_session_id = None
+    if 'blink_counter_active' not in st.session_state:
+        st.session_state.blink_counter_active = False
     
-    # User guidance for liveness verification
-    st.info("💡 **Tip**: Look directly at the camera and blink naturally")
+    # Start button
+    if st.button("🚀 Start Live Blink Counter", key="start_blink_counter_btn", type="primary"):
+        try:
+            # Create unique session ID
+            session_id = f"liveness_session_{int(time.time())}"
+            st.session_state.blink_session_id = session_id
+            
+            # Initialize blink counter state
+            st.session_state.blink_counter_start_time = time.time()
+            st.session_state.blink_count = 0
+            st.session_state.blink_counter_camera_cap = None
+            st.session_state.last_blink_time = None
+            
+            st.session_state.blink_counter_active = True
+            st.success(f"✅ Live Blink Counter session started: {session_id}")
+            
+            # Reset liveness detection state
+            liveness.reset_state()
+            st.rerun()
+            
+        except Exception as e:
+            st.error(f"❌ Failed to start live blink counter: {e}")
+            return False
     
-    # Create camera placeholder
-    liveness_placeholder = st.empty()
+    # Live camera feed with real-time blink detection using Streamlit-compatible approach
+    if st.session_state.blink_counter_active and st.session_state.blink_session_id:
+        run_streamlit_compatible_blink_session(liveness)
     
-    # Initialize webcam for liveness
-    cap = cv2.VideoCapture(0)
-    if not cap.isOpened():
-        st.error("❌ Failed to open webcam for liveness check")
-        st.session_state.webcam_active = False
-        return False
-    
-    try:
-        # Set camera properties
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-        cap.set(cv2.CAP_PROP_FPS, 30)
-        
-        # Process live liveness detection
-        st.info("🎥 **Starting camera loop for liveness detection...**")
-        frame_count = 0
-        liveness_start_time = time.time()
-        blink_detected_frames = 0
-        required_blinks = 3  # Need 3 blinks to confirm liveness
-        max_wait_time = 45.0  # Maximum time to wait for liveness verification
-        
-        while st.session_state.webcam_active and st.session_state.real_time_step == 'liveness_verification':
-            ret, frame = cap.read()
-            if not ret:
-                st.error("❌ Failed to read from camera")
-                break
-            
-            frame_count += 1
-            elapsed_time = time.time() - liveness_start_time
-            
-            # Check timeout - if taking too long, restart the process
-            if elapsed_time > max_wait_time:
-                st.warning("⏰ **Timeout**: Liveness verification taking too long. Please ensure good lighting and look directly at the camera.")
-                st.info("🔄 Restarting liveness verification...")
-                time.sleep(2)  # Give user time to read the message
-                st.session_state.real_time_step = 'face_recognition'
-                cap.release()
-                st.session_state.webcam_active = False
-                st.rerun()
-                return False
-            
-            # Process every 3rd frame for liveness
-            if frame_count % 3 == 0:
-                try:
-                    # Perform liveness detection
-                    liveness_result = liveness.detect_blink_sequence(frame, timeout=10.0)
-                    
-                    if liveness_result.is_live:
-                        blink_detected_frames += 1
-                        
-                        # Show progress
-                        cv2.putText(frame, f"Blink Detected! ({blink_detected_frames}/{required_blinks})", (10, 90), 
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-                        
-                        # Only proceed after multiple blinks
-                        if blink_detected_frames >= required_blinks:
-                            # Show success message
-                            st.success("✅ **Liveness Verified**: Natural blinking detected!")
-                            
-                            # Store result and proceed
-                            st.session_state.liveness_result = liveness_result
-                            st.session_state.real_time_step = 'attendance_logging'
-                            
-                            # Release camera
-                            cap.release()
-                            st.session_state.webcam_active = False
-                            st.rerun()
-                            return True
-                    else:
-                        # Show liveness status
-                        elapsed_time = time.time() - liveness_start_time
-                        cv2.putText(frame, f"Liveness Check: {elapsed_time:.1f}s", (10, 30), 
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-                        cv2.putText(frame, "Blink naturally...", (10, 60), 
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-                        cv2.putText(frame, f"Blinks: {blink_detected_frames}/{required_blinks}", (10, 90), 
-                                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
-                        
-                except Exception as e:
-                    st.error(f"❌ Liveness detection error: {e}")
-                    cv2.putText(frame, f"Error: {str(e)[:50]}...", (10, 150), 
-                               cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
-            
-            # Display frame
-            liveness_placeholder.image(frame, channels="BGR", use_container_width=True)
-            
-            # Add delay for better user experience
-            time.sleep(0.1)
+    # Stop button (if session is active)
+    if st.session_state.blink_counter_active:
+        if st.button("⏹️ Stop Session", key="stop_blink_counter_btn", type="secondary"):
+            try:
+                # Clean up camera
+                if st.session_state.blink_counter_camera_cap:
+                    st.session_state.blink_counter_camera_cap.release()
+                    st.session_state.blink_counter_camera_cap = None
                 
-    finally:
-        # Release camera if loop ends
-        if cap.isOpened():
-            cap.release()
+                st.session_state.blink_counter_active = False
+                st.session_state.blink_session_id = None
+                st.success("✅ Live Blink Counter session stopped")
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ Error stopping session: {e}")
     
     return False
 
@@ -526,7 +894,11 @@ def handle_attendance_logging_step(attendance_manager):
     if st.session_state.liveness_result:
         st.write(f"Liveness is_live: {st.session_state.liveness_result.is_live}")
         st.write(f"Liveness confidence: {st.session_state.liveness_result.confidence}")
-        st.write(f"Liveness blink_count: {st.session_state.liveness_result.blink_count}")
+        if hasattr(st.session_state.liveness_result, 'details'):
+            blink_count = st.session_state.liveness_result.details.get('blink_count', 0)
+            st.write(f"Liveness blink_count: {blink_count}")
+        else:
+            st.write(f"Liveness blink_count: {getattr(st.session_state.liveness_result, 'blink_count', 'N/A')}")
     
     if not st.session_state.user_recognized or not st.session_state.liveness_result:
         st.error("❌ Missing recognition or liveness verification data")
@@ -927,16 +1299,33 @@ def show_attendance_summary():
                     st.metric("Total Today", total_today)
                 
                 with col2:
-                    present_today = len(today_df[today_df['Status'] == 'Present'])
+                    # Count all logged entries as present
+                    present_today = len(today_df[today_df['Status'] == 'logged'])
                     st.metric("Present", present_today)
                 
                 with col3:
+                    # Count late entries (if any)
                     late_today = len(today_df[today_df['Status'] == 'Late'])
                     st.metric("Late", late_today)
                 
                 with col4:
-                    attendance_rate = (present_today / total_today * 100) if total_today > 0 else 0
+                    # Calculate attendance rate based on total entries
+                    attendance_rate = (total_today / max(1, total_today) * 100) if total_today > 0 else 0
                     st.metric("Attendance Rate", f"{attendance_rate:.1f}%")
+                
+                # Show status breakdown
+                st.subheader("📈 Status Breakdown")
+                status_counts = today_df['Status'].value_counts()
+                for status, count in status_counts.items():
+                    st.write(f"• **{status.title()}**: {count} entries")
+                
+                # Show liveness verification stats
+                if 'Liveness_Verified' in today_df.columns:
+                    liveness_stats = today_df['Liveness_Verified'].value_counts()
+                    st.subheader("🔐 Liveness Verification Stats")
+                    for status, count in liveness_stats.items():
+                        status_text = "✅ Verified" if status == True else "❌ Failed" if status == False else "❓ Unknown"
+                        st.write(f"• **{status_text}**: {count} entries")
                 
                 # Show today's attendees
                 st.subheader("👥 Today's Attendees")

@@ -15,9 +15,10 @@ logger = logging.getLogger(__name__)
 class BlinkDetector:
     """Detects blinking in face images using Eye Aspect Ratio (EAR)"""
     
-    # Eye landmark indices (MediaPipe FaceMesh) - Class constants
-    LEFT_EYE_INDICES = [362, 385, 387, 263, 373, 380, 381, 382, 381, 374, 386, 387, 388, 466]
-    RIGHT_EYE_INDICES = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
+    # Correct MediaPipe FaceMesh eye landmark indices for EAR calculation
+    # These are the 6 key points needed for EAR calculation
+    LEFT_EYE_INDICES = [362, 385, 387, 263, 373, 380]  # 6 key points for EAR
+    RIGHT_EYE_INDICES = [33, 160, 158, 133, 153, 144]  # 6 key points for EAR
     
     def __init__(self, ear_threshold: float = 0.21, min_consecutive_frames: int = 2):
         """
@@ -72,34 +73,42 @@ class BlinkDetector:
     
     def _calculate_ear(self, landmarks: List, eye_indices: List[int]) -> float:
         """
-        Calculate Eye Aspect Ratio (EAR)
+        Calculate Eye Aspect Ratio (EAR) using correct formula
         
         Args:
-            landmarks: Face landmarks
-            eye_indices: Indices for eye landmarks
+            landmarks: Face landmarks from MediaPipe
+            eye_indices: 6 key eye landmark indices for EAR calculation
             
         Returns:
             EAR value
         """
         try:
-            # Extract eye landmark coordinates
+            # Extract the 6 key eye landmark coordinates
             eye_points = []
             for idx in eye_indices:
                 if idx < len(landmarks):
-                    x, y = landmarks[idx].x, landmarks[idx].y
+                    # Handle both landmark objects and direct landmark lists
+                    if hasattr(landmarks, 'landmark'):
+                        landmark = landmarks.landmark[idx]
+                    else:
+                        landmark = landmarks[idx]
+                    x, y = landmark.x, landmark.y
                     eye_points.append((x, y))
             
             if len(eye_points) < 6:
                 return 0.0
             
-            # Calculate vertical distances
+            # Calculate vertical distances (A and B)
+            # A = distance between points 1 and 5
             A = np.linalg.norm(np.array(eye_points[1]) - np.array(eye_points[5]))
+            # B = distance between points 2 and 4  
             B = np.linalg.norm(np.array(eye_points[2]) - np.array(eye_points[4]))
             
-            # Calculate horizontal distance
+            # Calculate horizontal distance (C)
+            # C = distance between points 0 and 3
             C = np.linalg.norm(np.array(eye_points[0]) - np.array(eye_points[3]))
             
-            # Calculate EAR
+            # Calculate EAR: (A + B) / (2.0 * C)
             if C > 0:
                 ear = (A + B) / (2.0 * C)
                 return ear
