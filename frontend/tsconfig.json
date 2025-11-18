@@ -1,0 +1,86 @@
+{
+  "compilerOptions": {
+    // Target modern JavaScript
+    "target": "ES2020",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    
+    // Allow JavaScript files (for gradual migration)
+    "allowJs": true,
+    
+    // Skip type checking of declaration files for faster compilation
+    "skipLibCheck": true,
+    
+    // Strict type checking - enabled for better type safety
+    "strict": true,
+    
+    // Don't emit files (Next.js handles this)
+    "noEmit": true,
+    
+    // ES module interop
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    
+    // Module system
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    
+    // Resolve JSON modules
+    "resolveJsonModule": true,
+    
+    // Isolated modules for better performance
+    "isolatedModules": true,
+    
+    // JSX configuration for React
+    "jsx": "preserve",
+    
+    // Incremental compilation for faster builds
+    "incremental": true,
+    
+    // Next.js TypeScript plugin
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    
+    // Base URL for module resolution
+    "baseUrl": ".",
+    
+    // Path aliases - matches architecture requirements
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    
+    // Strict type checking options
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    
+    // Code quality checks
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    
+    // Additional checks
+    "noUncheckedIndexedAccess": false, // Can be enabled for stricter array access
+    "noPropertyAccessFromIndexSignature": false, // Can be enabled for stricter property access
+  },
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    "out",
+    "dist"
+  ]
+}

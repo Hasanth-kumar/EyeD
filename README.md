@@ -3,7 +3,8 @@
 > **Smart, Secure, and Simple Attendance Management with AI-Powered Face Recognition, Liveness Detection, and Gamification**
 
 [![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://python.org)
-[![Streamlit](https://img.shields.io/badge/Streamlit-Latest-red.svg)](https://streamlit.io)
+[![Next.js](https://img.shields.io/badge/Next.js-14+-black.svg)](https://nextjs.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Latest-green.svg)](https://fastapi.tiangolo.com)
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.x-green.svg)](https://opencv.org)
 [![DeepFace](https://img.shields.io/badge/DeepFace-Latest-orange.svg)](https://github.com/serengil/deepface)
 [![Progress](https://img.shields.io/badge/Progress-95%25%20Production%20Ready-brightgreen.svg)](https://github.com/yourusername/eyed)
@@ -22,7 +23,7 @@ EyeD is an intelligent attendance management system that combines:
 - **🤖 AI Face Recognition** using DeepFace and OpenCV
 - **👁️ Liveness Detection** with MediaPipe to prevent spoofing
 - **📊 Real-time Analytics** and comprehensive reporting
-- **🖥️ Modern Web Dashboard** built with Streamlit
+- **🖥️ Modern Web Dashboard** (migrating from Streamlit to Next.js)
 - **🔒 Secure Verification** with confidence scoring and transparency
 - **🏆 Gamification System** with badges, achievements, and user engagement
 - **⏰ Timeline Analysis** for arrival time tracking and pattern recognition
@@ -66,54 +67,39 @@ EyeD is an intelligent attendance management system that combines:
 
 ## 🏗️ **Architecture Overview**
 
+### Current Architecture (Clean Architecture)
+
 ```
 EyeD/
-├── src/
-│   ├── dashboard/                 # 🆕 Modular Streamlit Dashboard
-│   │   ├── components/           # Individual dashboard components
-│   │   │   ├── overview.py       # Main dashboard metrics
-│   │   │   ├── attendance_table.py # Enhanced attendance table
-│   │   │   ├── analytics.py      # Charts and insights ✅ FIXED
-│   │   │   ├── registration.py   # User registration
-│   │   │   ├── testing.py        # Testing suite
-│   │   │   ├── debug.py          # Debug tools
-│   │   │   └── gamification.py   # 🆕 Gamification system (Day 14)
-│   │   ├── pages/                # Dashboard pages
-│   │   │   ├── Dashboard.py      # Main dashboard
-│   │   │   ├── Attendance.py     # Attendance management
-│   │   │   ├── Daily_Attendance.py # Real-time attendance ✅ FIXED
-│   │   │   ├── Analytics.py      # Analytics page ✅ FIXED
-│   │   │   ├── Registration.py   # User registration
-│   │   │   ├── Gamification.py   # Gamification features
-│   │   │   ├── Debug.py          # Debug tools
-│   │   │   └── Testing.py        # Testing interface
-│   │   ├── utils/                # Dashboard utilities
-│   │   └── app.py                # Main dashboard application
-│   ├── modules/                  # Core AI modules
-│   │   ├── registration.py       # Face registration system
-│   │   ├── recognition.py        # Face recognition engine
-│   │   ├── liveness.py           # Liveness detection
-│   │   ├── attendance.py         # Attendance management
-│   │   ├── face_db.py            # Face database management
-│   │   └── liveness_detection/   # Liveness detection modules
-│   ├── services/                 # Business logic services
-│   │   ├── attendance_service.py # Attendance business logic ✅ FIXED
-│   │   ├── analytics_service.py  # Analytics business logic
-│   │   ├── gamification_service.py # Gamification logic
-│   │   ├── recognition_service.py # Recognition business logic
-│   │   └── user_service.py       # User management
-│   ├── repositories/             # Data access layer
-│   │   ├── attendance_repository.py # Attendance data access
-│   │   ├── face_repository.py    # Face data access
-│   │   └── user_repository.py    # User data access
-│   ├── interfaces/               # Interface definitions
-│   └── utils/                    # Utility functions
-├── data/                         # Data storage
-│   ├── faces/                    # Registered face images
-│   ├── attendance.csv            # Attendance records ✅ WORKING
-│   └── exports/                  # Export files
-├── src/tests/                    # Comprehensive test suites
-└── docs/                         # Documentation
+├── core/                         # Core domain logic (SRP-compliant)
+│   ├── recognition/              # Face recognition domain
+│   ├── liveness/                 # Liveness detection domain
+│   ├── attendance/               # Attendance domain
+│   └── shared/                   # Shared core components
+├── domain/                       # Domain models and services
+│   ├── entities/                 # Domain entities
+│   ├── services/                 # Domain services (business logic)
+│   └── shared/                   # Shared domain components
+├── use_cases/                    # Application use cases
+│   ├── mark_attendance.py
+│   ├── register_user.py
+│   └── ...
+├── repositories/                 # Data access layer
+│   ├── attendance_repository.py
+│   ├── user_repository.py
+│   └── face_repository.py
+├── infrastructure/               # External concerns
+│   ├── storage/                  # File/database storage
+│   ├── camera/                   # Camera handling
+│   ├── config/                   # Configuration
+│   └── utils/                    # Infrastructure utilities
+├── api/                          # REST API layer (to be created)
+│   ├── routes/                   # API route handlers
+│   └── middleware/               # API middleware
+├── frontend/                     # Next.js frontend
+│   ├── app/                      # Next.js App Router
+│   ├── components/               # React components
+│   └── lib/                      # Utilities and hooks
 ```
 
 ---

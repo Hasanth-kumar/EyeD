@@ -1,12 +1,13 @@
 # Core Computer Vision & AI
-opencv-python==4.12.0.88      # Face detection and image processing
-mediapipe==0.10.8             # Liveness detection and face landmarks
+opencv-python==4.12.0.88      # Face detection and image processing (PRIMARY)
+protobuf>=4.25.3,<5.0         # Protocol buffers (compatible with MediaPipe 0.10.21 and TensorFlow 2.19.1)
+mediapipe>=0.10.21            # Liveness detection and face landmarks (FALLBACK)
 deepface==0.0.95              # Face recognition and embedding extraction
-tensorflow==2.19.1            # Deep learning backend for DeepFace
-
-# Data Processing & Analysis
-numpy==2.1.3                  # Numerical computing
+tensorflow==2.19.1            # Deep learning backend for DeepFace (compatible with protobuf 4.x)
+tf-keras>=2.19.0,<2.20.0      # Keras for TensorFlow 2.19.1 (required by retina-face)
+numpy==1.26.4                 # Numerical computing (compatible with MediaPipe <2.0 requirement)
 pandas==2.3.2                 # Data manipulation and CSV handling
+openpyxl==3.1.5               # Excel file support for data export
 statsmodels==0.14.5           # Statistical modeling and trend analysis
 
 # Web Interface & Dashboard
@@ -18,9 +19,13 @@ mtcnn==1.0.0                  # Alternative face detection
 retina-face==0.0.17           # High-accuracy face detection
 
 # Web Framework & Deployment
-flask==3.1.2                  # Web API framework
-flask-cors==6.0.1             # Cross-origin resource sharing
-gunicorn==23.0.0              # WSGI server for deployment
+flask==3.1.2                  # Web API framework (legacy)
+flask-cors==6.0.1             # Cross-origin resource sharing (legacy)
+gunicorn==23.0.0              # WSGI server for deployment (legacy)
+fastapi==0.115.0              # Modern REST API framework
+uvicorn[standard]==0.32.0     # ASGI server for FastAPI
+python-multipart==0.0.9      # For file uploads in FastAPI
+pillow==11.0.0                # Image processing (PIL)
 
 # Testing
 pytest==8.4.1                 # Testing framework
