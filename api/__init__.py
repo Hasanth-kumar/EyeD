@@ -9,3 +9,5 @@ It follows Clean Architecture principles by acting as a thin adapter layer.
 
 
 
+
+

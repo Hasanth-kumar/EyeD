@@ -330,3 +330,5 @@ class TestLivenessVerifier:
         verifier = LivenessVerifier(mock_detector)
         assert verifier.min_blinks == 3
 
+
+

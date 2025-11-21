@@ -99,3 +99,5 @@ class LivenessVerifier:
         blink_count = self.blink_detector.get_blink_count()
         return blink_count >= self.min_blinks
 
+
+

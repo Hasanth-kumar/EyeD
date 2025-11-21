@@ -189,3 +189,5 @@ class BlinkDetector:
             # Return 0.0 on any calculation error
             return 0.0
 
+
+

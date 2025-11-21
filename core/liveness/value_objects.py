@@ -45,3 +45,5 @@ class BlinkResult:
                 f"blink_count ({self.blink_count}) must be non-negative"
             )
 
+
+
