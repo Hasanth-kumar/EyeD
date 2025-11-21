@@ -182,6 +182,9 @@ data/attendance.csv
 *.swo
 *~
 
+# Cursor IDE
+.cursor/
+
 # OS generated files
 .DS_Store
 .DS_Store?
