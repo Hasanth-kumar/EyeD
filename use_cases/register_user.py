@@ -7,6 +7,7 @@ Orchestrates user registration workflow with face recognition.
 from dataclasses import dataclass
 from typing import Optional, Protocol
 from datetime import datetime
+import logging
 import numpy as np
 
 from domain.entities.user import User
@@ -18,6 +19,8 @@ from domain.shared.exceptions import (
     InsufficientQualityError,
     EmbeddingExtractionFailedError
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -115,7 +118,6 @@ class RegisterUserUseCase:
             # We need face_location for face_bbox, so detect first to get location
             detection_result = self.registration_service.face_detector.detect(request.face_image)
             if not detection_result.faces_detected or detection_result.face_count == 0:
-                from domain.shared.exceptions import FaceDetectionFailedError
                 raise FaceDetectionFailedError()
             
             # Get face_location for bbox (will be used later)
