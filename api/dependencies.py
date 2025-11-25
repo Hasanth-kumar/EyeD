@@ -19,8 +19,10 @@ from use_cases.get_user_info import GetUserInfoUseCase
 from use_cases.get_user_performance import GetUserPerformanceUseCase
 from use_cases.update_user_info import UpdateUserInfoUseCase
 from use_cases.get_attendance_records import GetAttendanceRecordsUseCase
+from use_cases.mark_class_attendance import MarkClassAttendanceUseCase
 from domain.services.recognition import FaceRecognitionService
 from domain.shared.constants import DEFAULT_CONFIDENCE_THRESHOLD
+from core.shared.constants import DEFAULT_EMBEDDING_MODEL
 from domain.services.liveness import LivenessService
 from domain.services.attendance import AttendanceService
 from domain.services.analytics import MetricsCalculator, TimelineAnalyzer
@@ -39,6 +41,7 @@ from core.recognition.detector import FaceDetector
 from core.recognition.embedding_extractor import EmbeddingExtractor
 from core.recognition.recognizer import FaceRecognizer
 from core.recognition.quality_assessor import QualityAssessor
+from core.recognition.strategies import MediaPipeDetectionStrategy, YOLODetectionStrategy
 from core.liveness.blink_detector import BlinkDetector
 from core.liveness.landmark_extractor import LandmarkExtractor
 from domain.services.liveness.liveness_verifier import LivenessVerifier
@@ -53,6 +56,7 @@ _face_detector: FaceDetector | None = None
 _embedding_extractor: EmbeddingExtractor | None = None
 _face_recognizer: FaceRecognizer | None = None
 _quality_assessor: QualityAssessor | None = None
+_quality_assessor_class_attendance: QualityAssessor | None = None
 _blink_detector: BlinkDetector | None = None
 _landmark_extractor: LandmarkExtractor | None = None
 _liveness_verifier: LivenessVerifier | None = None
@@ -63,6 +67,11 @@ _attendance_repository: AttendanceRepository | None = None
 _face_repository: FaceRepository | None = None
 _user_repository: UserRepository | None = None
 _face_recognition_service: FaceRecognitionService | None = None
+_face_detector_mediapipe: FaceDetector | None = None
+_face_detector_yolo: FaceDetector | None = None
+_face_recognition_service_mediapipe: FaceRecognitionService | None = None
+_face_recognition_service_yolo: FaceRecognitionService | None = None
+_face_recognition_service_class_attendance: FaceRecognitionService | None = None
 _liveness_service: LivenessService | None = None
 _attendance_service: AttendanceService | None = None
 _recognize_face_use_case: RecognizeFaceUseCase | None = None
@@ -81,6 +90,7 @@ _get_user_info_use_case: GetUserInfoUseCase | None = None
 _get_user_performance_use_case: GetUserPerformanceUseCase | None = None
 _update_user_info_use_case: UpdateUserInfoUseCase | None = None
 _get_attendance_records_use_case: GetAttendanceRecordsUseCase | None = None
+_mark_class_attendance_use_case: MarkClassAttendanceUseCase | None = None
 
 
 def get_file_storage() -> FileStorage:
@@ -115,8 +125,8 @@ def get_embedding_extractor() -> EmbeddingExtractor:
     """Get or create embedding extractor instance."""
     global _embedding_extractor
     if _embedding_extractor is None:
-        _embedding_extractor = EmbeddingExtractor()
-        logger.info("Embedding extractor initialized")
+        _embedding_extractor = EmbeddingExtractor(model_name=DEFAULT_EMBEDDING_MODEL)
+        logger.info(f"Embedding extractor initialized with {DEFAULT_EMBEDDING_MODEL} model")
     return _embedding_extractor
 
 
@@ -136,6 +146,16 @@ def get_quality_assessor() -> QualityAssessor:
         _quality_assessor = QualityAssessor()
         logger.info("Quality assessor initialized")
     return _quality_assessor
+
+
+def get_quality_assessor_class_attendance() -> QualityAssessor:
+    """Get or create quality assessor instance for class attendance with lower threshold."""
+    global _quality_assessor_class_attendance
+    if _quality_assessor_class_attendance is None:
+        # Lower threshold (0.3) for class attendance to allow smaller/distant faces
+        _quality_assessor_class_attendance = QualityAssessor(min_quality_threshold=0.3)
+        logger.info("Quality assessor for class attendance initialized (threshold=0.3)")
+    return _quality_assessor_class_attendance
 
 
 def get_blink_detector() -> BlinkDetector:
@@ -227,6 +247,98 @@ def get_face_recognition_service() -> FaceRecognitionService:
         )
         logger.info("Face recognition service initialized")
     return _face_recognition_service
+
+
+def get_face_detector_mediapipe() -> FaceDetector:
+    """Get or create face detector instance with MediaPipe as primary strategy."""
+    global _face_detector_mediapipe
+    if _face_detector_mediapipe is None:
+        # Use very low confidence threshold and full-range model for better multi-face detection
+        # Lower threshold helps detect faces that are further away or partially occluded
+        mediapipe_strategy = MediaPipeDetectionStrategy(
+            min_detection_confidence=0.2,  # Lower threshold to catch all faces in group photos
+            model_selection=1  # Full-range (0-5m) for group photos
+        )
+        _face_detector_mediapipe = FaceDetector(detection_strategy=mediapipe_strategy)
+        logger.info("Face detector (MediaPipe primary) initialized with confidence=0.2, full-range model")
+    return _face_detector_mediapipe
+
+
+def get_face_detector_yolo() -> FaceDetector:
+    """Get or create face detector instance with YOLO as primary strategy."""
+    global _face_detector_yolo
+    if _face_detector_yolo is None:
+        try:
+            # Use default model path to trigger fallback logic (tries face models, then falls back to yolov8n.pt)
+            model_path = "yolov8n.pt"  # Ultralytics will download this automatically
+            conf_threshold = 0.25  # Lower threshold for better multi-face detection in group photos
+            yolo_strategy = YOLODetectionStrategy(
+                model_path=model_path,
+                conf_threshold=conf_threshold
+            )
+            _face_detector_yolo = FaceDetector(detection_strategy=yolo_strategy)
+            logger.info(f"Face detector (YOLO primary) initialized with model={model_path}, conf={conf_threshold}")
+        except ImportError as e:
+            logger.warning(f"YOLO is not available: {e}")
+            raise ImportError("YOLO is not available. Install it with: pip install ultralytics")
+    return _face_detector_yolo
+
+
+def get_face_recognition_service_mediapipe() -> FaceRecognitionService:
+    """Get or create face recognition service instance with MediaPipe-based detector."""
+    global _face_recognition_service_mediapipe
+    if _face_recognition_service_mediapipe is None:
+        _face_recognition_service_mediapipe = FaceRecognitionService(
+            face_detector=get_face_detector_mediapipe(),
+            embedding_extractor=get_embedding_extractor(),
+            face_recognizer=get_face_recognizer(),
+            quality_assessor=get_quality_assessor(),
+            confidence_threshold=DEFAULT_CONFIDENCE_THRESHOLD
+        )
+        logger.info("Face recognition service (MediaPipe primary) initialized")
+    return _face_recognition_service_mediapipe
+
+
+def get_face_recognition_service_yolo() -> FaceRecognitionService:
+    """Get or create face recognition service instance with YOLO-based detector."""
+    global _face_recognition_service_yolo
+    if _face_recognition_service_yolo is None:
+        try:
+            _face_recognition_service_yolo = FaceRecognitionService(
+                face_detector=get_face_detector_yolo(),
+                embedding_extractor=get_embedding_extractor(),
+                face_recognizer=get_face_recognizer(),
+                quality_assessor=get_quality_assessor(),
+                confidence_threshold=DEFAULT_CONFIDENCE_THRESHOLD
+            )
+            logger.info("Face recognition service (YOLO primary) initialized")
+        except ImportError as e:
+            logger.error(f"Failed to initialize YOLO-based face recognition service: {e}")
+            raise
+    return _face_recognition_service_yolo
+
+
+def get_face_recognition_service_class_attendance() -> FaceRecognitionService:
+    """Get or create face recognition service instance for class attendance with lower thresholds."""
+    global _face_recognition_service_class_attendance
+    if _face_recognition_service_class_attendance is None:
+        try:
+            # Lower thresholds for class attendance to handle smaller/distant faces:
+            # - Confidence threshold: 0.35 (instead of 0.45) for more lenient matching
+            # - Quality threshold: 0.3 (instead of 0.5) to allow smaller faces
+            _face_recognition_service_class_attendance = FaceRecognitionService(
+                face_detector=get_face_detector_yolo(),
+                embedding_extractor=get_embedding_extractor(),
+                face_recognizer=get_face_recognizer(),
+                quality_assessor=get_quality_assessor_class_attendance(),
+                confidence_threshold=0.35,  # Lower threshold for class photos
+                min_quality_threshold=0.3   # Lower quality threshold for distant faces
+            )
+            logger.info("Face recognition service for class attendance initialized (confidence=0.35, quality=0.3)")
+        except ImportError as e:
+            logger.error(f"Failed to initialize class attendance face recognition service: {e}")
+            raise
+    return _face_recognition_service_class_attendance
 
 
 def get_liveness_service() -> LivenessService:
@@ -440,4 +552,19 @@ def get_get_attendance_records_use_case() -> GetAttendanceRecordsUseCase:
         )
         logger.info("Get attendance records use case initialized")
     return _get_attendance_records_use_case
+
+
+def get_mark_class_attendance_use_case() -> MarkClassAttendanceUseCase:
+    """Get or create mark class attendance use case instance."""
+    global _mark_class_attendance_use_case
+    if _mark_class_attendance_use_case is None:
+        _mark_class_attendance_use_case = MarkClassAttendanceUseCase(
+            face_recognition_service=get_face_recognition_service_class_attendance(),
+            attendance_service=get_attendance_service(),
+            attendance_repository=get_attendance_repository(),
+            face_repository=get_face_repository(),
+            user_repository=get_user_repository()
+        )
+        logger.info("Mark class attendance use case initialized with lower thresholds (confidence=0.35, quality=0.3)")
+    return _mark_class_attendance_use_case
 

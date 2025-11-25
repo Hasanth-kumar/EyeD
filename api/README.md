@@ -41,6 +41,7 @@ Once the server is running, visit:
 
 ### Attendance
 - `POST /api/attendance/mark` - Mark attendance with face recognition and liveness detection
+- `POST /api/attendance/mark-class` - Mark attendance for entire class from single photo. This endpoint accepts a single class photo, uses YOLO (Ultralytics) for face detection optimized for multi-face detection in group photos, recognizes students, and marks attendance for all recognized students. Uses YOLOv8 or YOLOv11 face detection model for improved accuracy in group photos. Liveness verification is skipped for photo-based attendance.
 
 ### Health Check
 - `GET /health` - Health check endpoint

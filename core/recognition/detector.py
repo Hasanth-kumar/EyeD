@@ -13,8 +13,10 @@ from .value_objects import FaceLocation, DetectionResult
 from .strategies import (
     MediaPipeDetectionStrategy,
     OpenCVDetectionStrategy,
+    YOLODetectionStrategy,
     MEDIAPIPE_AVAILABLE,
-    OPENCV_AVAILABLE
+    OPENCV_AVAILABLE,
+    YOLO_AVAILABLE
 )
 
 
@@ -168,6 +170,17 @@ class FaceDetector:
                 print(f"[FaceDetector] MediaPipe returned {len(detections)} detections")
             except Exception as e:
                 print(f"[FaceDetector] MediaPipe failed: {e}")
+                import traceback
+                traceback.print_exc()
+                detections = []
+        elif self.detection_strategy is not None and self.primary_strategy is None and self.fallback_strategy is None:
+            # Strategy passed directly (e.g., MediaPipe as primary for class attendance)
+            try:
+                detections = self.detection_strategy.detect(processed_image)
+                strategy_used = type(self.detection_strategy).__name__
+                print(f"[FaceDetector] {strategy_used} returned {len(detections)} detections")
+            except Exception as e:
+                print(f"[FaceDetector] {type(self.detection_strategy).__name__} failed: {e}")
                 import traceback
                 traceback.print_exc()
                 detections = []

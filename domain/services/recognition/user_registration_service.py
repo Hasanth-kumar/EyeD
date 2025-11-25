@@ -7,6 +7,7 @@ This service groups related face recognition operations needed for user registra
 
 from typing import Tuple
 import numpy as np
+import logging
 
 from core.recognition.detector import FaceDetector
 from core.recognition.embedding_extractor import EmbeddingExtractor
@@ -21,6 +22,8 @@ from domain.shared.exceptions import (
     InsufficientQualityError,
     EmbeddingExtractionFailedError
 )
+
+logger = logging.getLogger(__name__)
 
 
 class UserRegistrationService:
@@ -89,9 +92,28 @@ class UserRegistrationService:
             )
         
         # Step 3: Extract embedding
-        embedding_result = self.embedding_extractor.extract(face_image)
-        if embedding_result is None:
-            raise EmbeddingExtractionFailedError()
+        try:
+            embedding_result = self.embedding_extractor.extract(face_image)
+            if embedding_result is None:
+                logger.error(
+                    f"Embedding extraction returned None. "
+                    f"Face image shape: {face_image.shape}, dtype: {face_image.dtype}, "
+                    f"Model: {self.embedding_extractor.model_name}"
+                )
+                raise EmbeddingExtractionFailedError(
+                    message=f"Face embedding extraction failed with {self.embedding_extractor.model_name} model. "
+                    f"This may indicate the model needs to be downloaded or there's an issue with the face image."
+                )
+        except Exception as e:
+            logger.error(
+                f"Exception during embedding extraction: {type(e).__name__}: {str(e)}. "
+                f"Face image shape: {face_image.shape}, dtype: {face_image.dtype}, "
+                f"Model: {self.embedding_extractor.model_name}",
+                exc_info=True
+            )
+            raise EmbeddingExtractionFailedError(
+                message=f"Face embedding extraction failed: {str(e)}"
+            )
         
         return face_image, quality_result, embedding_result
     

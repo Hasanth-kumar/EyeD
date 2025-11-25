@@ -19,11 +19,13 @@ from use_cases.mark_attendance import MarkAttendanceUseCase, MarkAttendanceReque
 from use_cases.recognize_face import RecognizeFaceUseCase, RecognizeFaceRequest
 from use_cases.get_attendance_records import GetAttendanceRecordsUseCase, GetAttendanceRecordsRequest
 from use_cases.get_all_users import GetAllUsersUseCase, GetAllUsersRequest
+from use_cases.mark_class_attendance import MarkClassAttendanceUseCase, MarkClassAttendanceRequest
 from api.dependencies import (
     get_mark_attendance_use_case,
     get_recognize_face_use_case,
     get_get_attendance_records_use_case,
-    get_get_all_users_use_case
+    get_get_all_users_use_case,
+    get_mark_class_attendance_use_case
 )
 from core.recognition.quality_assessor import QualityAssessor
 from domain.shared.exceptions import (
@@ -116,6 +118,32 @@ class AttendanceStatsDTO(BaseModel):
     data: AttendanceStatsDataDTO
     success: bool
     message: Optional[str] = None
+
+
+class MarkClassAttendanceRequestDTO(BaseModel):
+    """Request DTO for marking class attendance."""
+    classImage: str  # Base64 encoded class photo
+    location: Optional[str] = None
+
+
+class IndividualAttendanceResultDTO(BaseModel):
+    """DTO for individual attendance result."""
+    userId: str
+    userName: str
+    confidence: float
+    success: bool
+    error: Optional[str] = None
+    timestamp: str
+
+
+class MarkClassAttendanceResponseDTO(BaseModel):
+    """Response DTO for marking class attendance."""
+    success: bool
+    results: List[IndividualAttendanceResultDTO]
+    totalDetected: int
+    totalRecognized: int
+    totalMarked: int
+    message: str
 
 
 def _base64_to_numpy(base64_string: str) -> np.ndarray:
@@ -620,6 +648,81 @@ async def get_attendance_stats(
                 attendanceRate=0.0
             ),
             success=False,
+            message="An unexpected error occurred. Please try again."
+        )
+
+
+@router.post("/mark-class", response_model=MarkClassAttendanceResponseDTO)
+async def mark_class_attendance(
+    request: MarkClassAttendanceRequestDTO,
+    use_case: MarkClassAttendanceUseCase = Depends(get_mark_class_attendance_use_case)
+):
+    """
+    Mark class attendance endpoint.
+    
+    This endpoint accepts a single class photo, detects all faces, recognizes students,
+    and marks attendance for all recognized students. Liveness verification is skipped
+    for photo-based attendance.
+    
+    This endpoint:
+    1. Validates request (DTO validation)
+    2. Converts DTO to use case request (base64 → numpy array)
+    3. Calls use case (business logic is here)
+    4. Converts use case response to DTO
+    5. Returns HTTP response
+    
+    NO business logic here - all in use case.
+    """
+    try:
+        # Convert base64 classImage to numpy array
+        class_image = _base64_to_numpy(request.classImage)
+        
+        # Create use case request
+        use_case_request = MarkClassAttendanceRequest(
+            class_image=class_image,
+            device_info="class_photo",
+            location=request.location or "unknown"
+        )
+        
+        # Call use case (business logic is here)
+        response = use_case.execute(use_case_request)
+        
+        # Convert response to DTOs
+        current_timestamp = datetime.now().isoformat()
+        result_dtos = []
+        for result in response.results:
+            result_dtos.append(IndividualAttendanceResultDTO(
+                userId=result.user_id,
+                userName=result.user_name,
+                confidence=result.confidence,
+                success=result.success,
+                error=result.error_message,
+                timestamp=current_timestamp
+            ))
+        
+        # Build message
+        if response.success:
+            message = f"Class attendance processed: {response.total_detected} faces detected, {response.total_recognized} recognized, {response.total_marked} marked"
+        else:
+            message = response.error or "Failed to process class attendance"
+        
+        return MarkClassAttendanceResponseDTO(
+            success=response.success,
+            results=result_dtos,
+            totalDetected=response.total_detected,
+            totalRecognized=response.total_recognized,
+            totalMarked=response.total_marked,
+            message=message
+        )
+    
+    except Exception as e:
+        logger.exception(f"Unexpected error in mark_class_attendance: {str(e)}")
+        return MarkClassAttendanceResponseDTO(
+            success=False,
+            results=[],
+            totalDetected=0,
+            totalRecognized=0,
+            totalMarked=0,
             message="An unexpected error occurred. Please try again."
         )
 

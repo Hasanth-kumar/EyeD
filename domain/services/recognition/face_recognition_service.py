@@ -12,8 +12,9 @@ The service supports single-frame recognition, which is used in Phase 1 to
 identify the user before proceeding to liveness verification.
 """
 
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, List
 import numpy as np
+import logging
 
 from core.recognition.detector import FaceDetector
 from core.recognition.embedding_extractor import EmbeddingExtractor
@@ -40,6 +41,9 @@ class FaceRecognitionService:
     
     This service coordinates face detection, quality assessment, embedding extraction,
     and face recognition. It encapsulates the workflow of recognizing a face from an image.
+    
+    Uses ArcFace model for embedding extraction, which provides improved accuracy
+    especially for multi-face scenarios and smaller/distant faces in group photos.
     """
     
     def __init__(
@@ -122,6 +126,9 @@ class FaceRecognitionService:
         a user from a single face image. It processes a single frame and does
         not require a sequence of frames.
         
+        Uses ArcFace model for embedding extraction, providing improved recognition
+        accuracy compared to previous models.
+        
         Args:
             face_image: Cropped face image (single frame from Phase 1).
             known_embeddings: Dictionary mapping user_id to embedding arrays.
@@ -157,6 +164,80 @@ class FaceRecognitionService:
             )
         
         return recognition_result
+    
+    def recognize_multiple_faces(
+        self,
+        image: np.ndarray,
+        known_embeddings: Dict[str, np.ndarray],
+        user_names: Dict[str, str]
+    ) -> List[Optional[RecognitionResult]]:
+        """
+        Detect and recognize all faces in an image.
+        
+        This method processes a single image containing multiple faces, detecting
+        each face and attempting recognition. Used for class attendance where
+        a single photo contains multiple students.
+        
+        Uses ArcFace model for embedding extraction, which provides superior
+        performance for smaller and more distant faces. This is especially
+        beneficial for class attendance photos where students may be at varying
+        distances from the camera.
+        
+        Args:
+            image: Full image containing multiple faces.
+            known_embeddings: Dictionary mapping user_id to embedding arrays.
+            user_names: Dictionary mapping user_id to user names.
+        
+        Returns:
+            List of RecognitionResult objects (one per detected face).
+            Returns None for faces that fail detection, quality check, or recognition.
+        """
+        logger = logging.getLogger(__name__)
+        results: List[Optional[RecognitionResult]] = []
+        
+        # Step 1: Detect all faces
+        detection_result = self.face_detector.detect(image)
+        if not detection_result.faces_detected or detection_result.face_count == 0:
+            logger.info("No faces detected in image")
+            return results
+        
+        logger.info(f"Detected {detection_result.face_count} face(s) in image")
+        
+        # Step 2: Process each detected face
+        for face_location in detection_result.faces:
+            try:
+                # Extract face region
+                face_image = self._extract_face_region(image, face_location)
+                
+                # Assess quality
+                quality_result = self.quality_assessor.assess(face_image)
+                if quality_result.overall_score < self.min_quality_threshold:
+                    logger.debug(f"Face quality insufficient: {quality_result.overall_score:.3f} < {self.min_quality_threshold}")
+                    results.append(None)
+                    continue
+                
+                # Extract embedding
+                embedding_result = self.embedding_extractor.extract(face_image)
+                if embedding_result is None:
+                    logger.debug("Failed to extract embedding for face")
+                    results.append(None)
+                    continue
+                
+                # Recognize face
+                recognition_result = self.face_recognizer.recognize(
+                    face_embedding=embedding_result.embedding,
+                    known_embeddings=known_embeddings,
+                    threshold=self.confidence_threshold,
+                    user_names=user_names
+                )
+                
+                results.append(recognition_result)
+                
+            except Exception as e:
+                logger.warning(f"Error processing face: {str(e)}")
+                results.append(None)
+        
+        return results
     
     def _extract_face_region(
         self,

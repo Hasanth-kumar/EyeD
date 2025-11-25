@@ -1,10 +1,11 @@
 """
 Face detection strategies for different detection algorithms.
 
-This module provides implementations of detection strategies for MediaPipe and OpenCV.
+This module provides implementations of detection strategies for MediaPipe, OpenCV, and YOLO.
 """
 
 from typing import List
+import logging
 import numpy as np
 
 from .value_objects import FaceLocation
@@ -26,11 +27,21 @@ except ImportError:
     OPENCV_AVAILABLE = False
     cv2 = None
 
+# Try to import Ultralytics YOLO
+try:
+    from ultralytics import YOLO
+    YOLO_AVAILABLE = True
+except ImportError:
+    YOLO_AVAILABLE = False
+    YOLO = None
+
 __all__ = [
     'MediaPipeDetectionStrategy',
     'OpenCVDetectionStrategy',
+    'YOLODetectionStrategy',
     'MEDIAPIPE_AVAILABLE',
-    'OPENCV_AVAILABLE'
+    'OPENCV_AVAILABLE',
+    'YOLO_AVAILABLE'
 ]
 
 
@@ -197,5 +208,170 @@ class OpenCVDetectionStrategy:
             print(f"[OpenCV] Exception during detection: {e}")
             import traceback
             traceback.print_exc()
+            return []
+
+
+class YOLODetectionStrategy:
+    """YOLO-based face detection strategy using Ultralytics YOLO."""
+    
+    def __init__(self, model_path: str = "yolov8n.pt", conf_threshold: float = 0.25):
+        """
+        Initialize YOLO detection strategy.
+        
+        Args:
+            model_path: Path to YOLO model file. Tries face-specific models first,
+                       falls back to general YOLO model if face models unavailable.
+            conf_threshold: Confidence threshold for detection (default: 0.25)
+        """
+        if not YOLO_AVAILABLE:
+            raise ImportError("YOLO is not available. Install it with: pip install ultralytics")
+        
+        self.conf_threshold = conf_threshold
+        self.logger = logging.getLogger(__name__)
+        
+        # If default model path, try face-specific models first, then fallback
+        if model_path == "yolov8n.pt":
+            # Try face-specific models first, then fallback to general YOLO
+            face_models = ["yolov8n-face.pt", "yolov11n-face.pt", "yolov8n.pt"]
+            model_loaded = False
+            for model_name in face_models:
+                try:
+                    self.model = YOLO(model_name)
+                    self.logger.info(f"YOLO model loaded: {model_name}")
+                    model_loaded = True
+                    break
+                except Exception as e:
+                    self.logger.debug(f"Failed to load {model_name}: {e}")
+                    continue
+            
+            if not model_loaded:
+                raise ValueError("Failed to load any YOLO model. Please check your installation.")
+        else:
+            # Use the specified model path directly
+            try:
+                self.model = YOLO(model_path)
+                self.logger.info(f"YOLO model loaded from {model_path}")
+            except Exception as e:
+                self.logger.error(f"Failed to load YOLO model from {model_path}: {e}")
+                raise ValueError(f"Failed to load YOLO model from {model_path}: {e}")
+    
+    def detect(self, image: np.ndarray) -> List[tuple[FaceLocation, float]]:
+        """
+        Detect faces using YOLO.
+        
+        Args:
+            image: Input image as numpy array (BGR or RGB format)
+            
+        Returns:
+            List of tuples containing (FaceLocation, confidence_score)
+        """
+        if not YOLO_AVAILABLE:
+            return []
+        
+        try:
+            # Validate image input
+            if not isinstance(image, np.ndarray):
+                self.logger.warning("Invalid image: not a numpy array")
+                return []
+            
+            if image.size == 0:
+                self.logger.warning("Invalid image: empty array")
+                return []
+            
+            if len(image.shape) < 2:
+                self.logger.warning(f"Invalid image: insufficient dimensions (shape: {image.shape})")
+                return []
+            
+            # Get image dimensions for validation
+            h, w = image.shape[:2]
+            if h <= 0 or w <= 0:
+                self.logger.warning(f"Invalid image: invalid dimensions (h={h}, w={w})")
+                return []
+            
+            # Convert BGR to RGB if needed (YOLO expects RGB)
+            if len(image.shape) == 3:
+                # Check if image is BGR (OpenCV format) or RGB
+                # YOLO can handle both, but RGB is preferred
+                rgb_image = image.copy()
+                # If image came from OpenCV, it's likely BGR
+                if cv2 is not None:
+                    rgb_image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+                    self.logger.debug("Converted BGR to RGB for YOLO")
+            else:
+                rgb_image = image
+                self.logger.debug("Image is not 3-channel, using as-is")
+            
+            # Run YOLO prediction
+            self.logger.debug("Processing image for face detection with YOLO...")
+            results = self.model.predict(
+                rgb_image,
+                conf=self.conf_threshold,
+                verbose=False
+            )
+            
+            if not results or len(results) == 0:
+                self.logger.debug("YOLO returned no results")
+                return []
+            
+            # Extract detections from first result (YOLO returns list of results)
+            result = results[0]
+            
+            if result.boxes is None or len(result.boxes) == 0:
+                self.logger.debug("YOLO found no detections")
+                return []
+            
+            self.logger.debug(f"YOLO found {len(result.boxes)} detection(s)")
+            
+            detections = []
+            # Image dimensions (h, w) already extracted and validated above
+            
+            # Check if we're using a face-specific model by checking the model path
+            # Face-specific models only detect faces, so no class filtering needed
+            is_face_model = False
+            try:
+                model_path_str = str(self.model.ckpt_path).lower()
+                is_face_model = 'face' in model_path_str
+            except (AttributeError, Exception):
+                # If we can't determine, assume it's a general model
+                is_face_model = False
+            
+            for box in result.boxes:
+                # Get bounding box coordinates (YOLO returns xyxy format: x1, y1, x2, y2)
+                x1, y1, x2, y2 = box.xyxy[0].cpu().numpy()
+                
+                # Extract and validate confidence score (ensure it's between 0.0 and 1.0)
+                confidence = float(box.conf[0].cpu().numpy())
+                confidence = max(0.0, min(1.0, confidence))  # Clamp to [0.0, 1.0]
+                
+                # Get class ID (0 is typically person class in general YOLO models)
+                # For face-specific models, all detections are faces
+                class_id = int(box.cls[0].cpu().numpy())
+                
+                # Filter for person/face class (class 0) if using general YOLO model
+                # Face-specific models don't need filtering as they only detect faces
+                if not is_face_model and class_id != 0:
+                    # Skip non-person detections in general YOLO models
+                    continue
+                
+                # Convert from xyxy to (x, y, width, height) format
+                x = int(x1)
+                y = int(y1)
+                width = int(x2 - x1)
+                height = int(y2 - y1)
+                
+                # Ensure coordinates are within image bounds
+                x = max(0, min(x, w - 1))
+                y = max(0, min(y, h - 1))
+                width = max(1, min(width, w - x))
+                height = max(1, min(height, h - y))
+                
+                face_location = FaceLocation(x=x, y=y, width=width, height=height)
+                detections.append((face_location, confidence))
+            
+            return detections
+            
+        except Exception as e:
+            # Log exception for debugging
+            self.logger.error(f"Exception during YOLO detection: {e}", exc_info=True)
             return []
 

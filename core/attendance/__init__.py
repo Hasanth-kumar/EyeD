@@ -7,7 +7,17 @@ infrastructure dependencies.
 
 from .attendance_logger import AttendanceLogger
 from .attendance_validator import AttendanceValidator
-from .value_objects import ValidationResult
+from .value_objects import (
+    ValidationResult,
+    IndividualAttendanceResult,
+    ClassAttendanceResult
+)
 
-__all__ = ['AttendanceLogger', 'AttendanceValidator', 'ValidationResult']
+__all__ = [
+    'AttendanceLogger',
+    'AttendanceValidator',
+    'ValidationResult',
+    'IndividualAttendanceResult',
+    'ClassAttendanceResult'
+]
 

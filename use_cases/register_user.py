@@ -74,6 +74,9 @@ class RegisterUserUseCase:
     
     This use case coordinates face detection, quality assessment, embedding
     extraction, and persistence to register a new user with face recognition.
+    
+    Uses ArcFace model for embedding extraction, which provides better recognition
+    accuracy compared to previous models, especially for smaller/distant faces.
     """
     
     def __init__(
@@ -124,6 +127,7 @@ class RegisterUserUseCase:
             face_location = detection_result.faces[0]
             
             # Process registration image (this will detect again internally, but that's okay)
+            # Embeddings extracted using ArcFace model for improved accuracy
             face_image, quality_result, embedding_result = (
                 self.registration_service.process_registration_image(request.face_image)
             )

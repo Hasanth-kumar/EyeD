@@ -108,6 +108,8 @@ Install Python dependencies:
 pip install -r requirements.txt
 ```
 
+**Note**: The face recognition system uses ArcFace model by default (via DeepFace). DeepFace automatically downloads the ArcFace model on first use - no additional installation needed.
+
 ### Step 3: Set Up Frontend
 
 Navigate to the frontend directory and install dependencies:
@@ -242,6 +244,25 @@ Run the test suite:
 ```bash
 pytest tests/
 ```
+
+---
+
+## 🔄 ArcFace Migration (v2.0.0)
+
+The face recognition system has been upgraded from VGG-Face to ArcFace model for improved accuracy.
+
+**Important**: Existing user registrations using VGG-Face embeddings are incompatible with ArcFace.
+
+**Action Required**: 
+- Re-register all users to generate new ArcFace embeddings
+
+**System Requirements**:
+- TensorFlow 2.15.0 (required for ArcFace compatibility with DeepFace 0.0.95)
+- All dependencies are configured in `requirements.txt`
+
+**Benefits**:
+- Better recognition accuracy, especially for smaller/distant faces
+- Improved performance in group photos (class attendance)
 
 ---
 

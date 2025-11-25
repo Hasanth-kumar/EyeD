@@ -9,6 +9,10 @@ All constants are immutable and have no domain or infrastructure dependencies.
 """
 
 # Face Recognition Constants
+DEFAULT_EMBEDDING_MODEL = "ArcFace"
+"""Default embedding model name. ArcFace provides better accuracy than VGG-Face, especially for smaller/distant faces in group photos. Can be overridden via EmbeddingExtractor parameter.
+Requires TensorFlow 2.15.0 for full compatibility with DeepFace 0.0.95."""
+
 DEFAULT_CONFIDENCE_THRESHOLD = 0.45
 """Default minimum confidence score required for face recognition (0.0 to 1.0)."""
 

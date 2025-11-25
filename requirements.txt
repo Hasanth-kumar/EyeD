@@ -1,10 +1,11 @@
 # Core Computer Vision & AI
-opencv-python==4.12.0.88      # Face detection and image processing (PRIMARY)
-protobuf>=4.25.3,<5.0         # Protocol buffers (compatible with MediaPipe 0.10.21 and TensorFlow 2.19.1)
+opencv-python==4.10.0.84      # Face detection and image processing (PRIMARY, compatible with numpy 1.26.4)
+protobuf>=4.25.3,<5.0         # Protocol buffers (required by MediaPipe 0.10.21, compatible with TensorFlow 2.15.0)
 mediapipe>=0.10.21            # Liveness detection and face landmarks (FALLBACK)
-deepface==0.0.95              # Face recognition and embedding extraction
-tensorflow==2.19.1            # Deep learning backend for DeepFace (compatible with protobuf 4.x)
-tf-keras>=2.19.0,<2.20.0      # Keras for TensorFlow 2.19.1 (required by retina-face)
+ultralytics>=8.0.0            # YOLO face detection for class attendance
+deepface==0.0.95              # Face recognition and embedding extraction (ArcFace model - fully supported)
+tensorflow==2.15.0            # Deep learning backend for DeepFace (compatible with ArcFace in DeepFace 0.0.95)
+tf-keras==2.15.0              # Keras for TensorFlow 2.15.0 (pinned to avoid compatibility issues with ArcFace)
 numpy==1.26.4                 # Numerical computing (compatible with MediaPipe <2.0 requirement)
 pandas==2.3.2                 # Data manipulation and CSV handling
 openpyxl==3.1.5               # Excel file support for data export

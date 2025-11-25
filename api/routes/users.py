@@ -5,6 +5,7 @@ This module provides REST API endpoints for user operations.
 It acts as a thin adapter between HTTP requests and use cases.
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -242,8 +243,14 @@ async def register_user(
             last_name=request.lastName
         )
         
-        # Call use case
-        response: RegisterUserResponse = use_case.execute(use_case_request)
+        # Run CPU-bound face recognition operations in thread pool to avoid blocking
+        # This allows the async endpoint to handle other requests while processing
+        loop = asyncio.get_event_loop()
+        response: RegisterUserResponse = await loop.run_in_executor(
+            None,  # Use default ThreadPoolExecutor
+            use_case.execute,
+            use_case_request
+        )
         
         if not response.success:
             return RegisterUserResponseDTO(

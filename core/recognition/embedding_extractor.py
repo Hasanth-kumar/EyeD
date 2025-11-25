@@ -5,98 +5,77 @@ This module provides pure embedding extraction logic with no infrastructure depe
 """
 
 import time
+import logging
 from typing import Optional, List
 import numpy as np
 
-# Try to import DeepFace
+logger = logging.getLogger(__name__)
+
+# Import DeepFace - environment should be properly configured via requirements.txt
 try:
     from deepface import DeepFace
     DEEPFACE_AVAILABLE = True
-except ImportError:
+    logger.info("DeepFace imported successfully")
+except ImportError as e:
+    logger.error(f"Failed to import DeepFace: {e}", exc_info=True)
+    DEEPFACE_AVAILABLE = False
+    DeepFace = None
+except Exception as e:
+    logger.warning(f"Error importing DeepFace: {e}", exc_info=True)
     DEEPFACE_AVAILABLE = False
     DeepFace = None
 
-# Try to import OpenCV for preprocessing
-try:
-    import cv2
-    OPENCV_AVAILABLE = True
-except ImportError:
-    OPENCV_AVAILABLE = False
-    cv2 = None
-
 from .value_objects import EmbeddingResult
 
-__all__ = ['EmbeddingExtractor', 'DEEPFACE_AVAILABLE', 'OPENCV_AVAILABLE']
+# Embedding dimensions for known models (no need to run inference to determine)
+EMBEDDING_DIMENSIONS = {
+    'ArcFace': 512,
+    'VGG-Face': 4096,
+    'Facenet': 128,
+    'Facenet512': 512,
+    'OpenFace': 128,
+    'DeepFace': 4096,
+    'DeepID': 160,
+    'Dlib': 128,
+    'SFace': 128,
+}
+
+__all__ = ['EmbeddingExtractor', 'DEEPFACE_AVAILABLE']
 
 
 class EmbeddingExtractor:
     """
     Pure face embedding extraction logic.
     
+    Uses ArcFace model by default for improved recognition accuracy, especially
+    for smaller/distant faces in group photos.
+    
     Single Responsibility: Extract face embeddings ONLY.
     No file I/O, no database access, no matching logic.
     """
     
-    def __init__(self, model_name: str = "VGG-Face", enforce_detection: bool = False, align: bool = True):
+    def __init__(self, model_name: str = "ArcFace", enforce_detection: bool = False, align: bool = True):
         """
         Initialize the embedding extractor.
         
         Args:
-            model_name: DeepFace model name (default: "VGG-Face")
+            model_name: DeepFace model name (default: "ArcFace")
             enforce_detection: Whether to enforce face detection (default: False)
             align: Whether to align faces (default: True)
         """
         if not DEEPFACE_AVAILABLE:
-            raise ImportError("DeepFace is not available. Install it with: pip install deepface")
-        
-        if not OPENCV_AVAILABLE:
-            raise ImportError("OpenCV is not available. Install it with: pip install opencv-python")
+            error_msg = (
+                "DeepFace is not available. Please install dependencies:\n"
+                "pip install deepface==0.0.95 tensorflow==2.15.0 tf-keras==2.15.0\n"
+                "Check application logs for detailed error messages."
+            )
+            logger.error(error_msg)
+            raise ImportError(error_msg)
         
         self.model_name = model_name
         self.enforce_detection = enforce_detection
         self.align = align
         self._embedding_dimension = None
-    
-    def _preprocess_image(self, image: np.ndarray) -> np.ndarray:
-        """
-        Preprocess image for embedding extraction.
-        
-        Args:
-            image: Input face image as numpy array (RGB, RGBA, or grayscale format)
-            
-        Returns:
-            Preprocessed image ready for DeepFace (RGB format, 224x224, uint8)
-        """
-        if not OPENCV_AVAILABLE:
-            raise ImportError("OpenCV is required for image preprocessing")
-        
-        # Ensure image is in RGB format (matching old preprocess_image behavior)
-        if len(image.shape) == 3 and image.shape[2] == 3:
-            # Already RGB (or BGR - caller should convert if needed)
-            processed = image.copy()
-        elif len(image.shape) == 3 and image.shape[2] == 4:
-            # RGBA to RGB
-            processed = image[:, :, :3]
-        elif len(image.shape) == 2:
-            # Grayscale to RGB
-            processed = cv2.cvtColor(image, cv2.COLOR_GRAY2RGB)
-        else:
-            # Unknown format, try to use as-is
-            processed = image.copy()
-        
-        # VGG-Face expects 224x224 images
-        target_size = (224, 224)
-        processed = cv2.resize(processed, target_size)
-        
-        # VGG-Face expects pixel values in range [0, 255], not normalized
-        if processed.dtype != np.uint8:
-            # Normalize to [0, 255] if needed
-            if processed.max() <= 1.0:
-                processed = (processed * 255).astype(np.uint8)
-            else:
-                processed = processed.astype(np.uint8)
-        
-        return processed
     
     def _normalize_embedding(self, embedding: np.ndarray) -> np.ndarray:
         """
@@ -129,12 +108,9 @@ class EmbeddingExtractor:
         start_time = time.time()
         
         try:
-            # Preprocess image
-            processed_image = self._preprocess_image(face_image)
-            
-            # Extract embedding using DeepFace
+            # DeepFace handles all preprocessing internally (resize, color conversion, etc.)
             embedding_result = DeepFace.represent(
-                img_path=processed_image,
+                img_path=face_image,
                 model_name=self.model_name,
                 enforce_detection=self.enforce_detection,
                 align=self.align
@@ -161,9 +137,14 @@ class EmbeddingExtractor:
             else:
                 return None
                 
-        except Exception:
-            # Return None on error (pure extraction logic, no logging)
-            return None
+        except Exception as e:
+            # Re-raise exception with context for better error handling at service layer
+            # This maintains pure extraction logic while allowing proper error propagation
+            error_msg = (
+                f"Embedding extraction failed with {self.model_name} model: "
+                f"{type(e).__name__}: {str(e)}"
+            )
+            raise RuntimeError(error_msg) from e
     
     def extract_batch(self, face_images: List[np.ndarray]) -> List[Optional[EmbeddingResult]]:
         """
@@ -186,21 +167,12 @@ class EmbeddingExtractor:
         Get the dimension of embeddings produced by this extractor.
         
         Returns:
-            Embedding dimension, or None if not yet determined
+            Embedding dimension, or None if model is not in known dimensions
         """
+        # Return cached dimension if available
         if self._embedding_dimension is not None:
             return self._embedding_dimension
         
-        # Try to determine dimension by extracting from a dummy image
-        # This is a fallback if extract() hasn't been called yet
-        try:
-            # Create a minimal dummy image (224x224 RGB)
-            dummy_image = np.zeros((224, 224, 3), dtype=np.uint8)
-            result = self.extract(dummy_image)
-            if result:
-                return result.dimension
-        except Exception:
-            pass
-        
-        return None
+        # Look up dimension from known model dimensions (fast dictionary lookup)
+        return EMBEDDING_DIMENSIONS.get(self.model_name)
 

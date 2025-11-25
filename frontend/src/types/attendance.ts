@@ -69,3 +69,35 @@ export interface RecognizeFaceResponse {
   message: string; // Success or error message
   dailyLimitReached: boolean; // True if user has reached daily attendance limit
 }
+
+/**
+ * Request type for marking class attendance from a single photo
+ */
+export interface MarkClassAttendanceRequest {
+  classImage: string; // Base64 encoded class photo
+  location?: string; // Optional location
+}
+
+/**
+ * Individual attendance result in class attendance response
+ */
+export interface IndividualAttendanceResult {
+  userId: string;
+  userName: string;
+  confidence: number;
+  success: boolean;
+  error?: string | null;
+  timestamp: string;
+}
+
+/**
+ * Response type for marking class attendance
+ */
+export interface MarkClassAttendanceResponse {
+  success: boolean;
+  results: IndividualAttendanceResult[];
+  totalDetected: number;
+  totalRecognized: number;
+  totalMarked: number;
+  message: string;
+}

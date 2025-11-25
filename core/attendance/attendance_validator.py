@@ -257,8 +257,11 @@ class AttendanceValidator:
         Returns:
             ValidationResult indicating whether the confidence is valid.
         """
-        # Validate that confidence is a number
-        if not isinstance(confidence, (int, float)):
+        # Validate that confidence is a number (including numpy types)
+        # Convert numpy types to Python float for validation
+        try:
+            confidence = float(confidence)
+        except (TypeError, ValueError):
             return ValidationResult.failure(
                 "Confidence must be a number",
                 error_code="INVALID_CONFIDENCE_TYPE"
@@ -271,8 +274,10 @@ class AttendanceValidator:
                 error_code="INVALID_CONFIDENCE_RANGE"
             )
         
-        # Validate that threshold is valid
-        if not isinstance(threshold, (int, float)):
+        # Validate that threshold is valid (including numpy types)
+        try:
+            threshold = float(threshold)
+        except (TypeError, ValueError):
             return ValidationResult.failure(
                 "Threshold must be a number",
                 error_code="INVALID_THRESHOLD_TYPE"
@@ -364,8 +369,10 @@ class AttendanceValidator:
         Returns:
             ValidationResult indicating whether the quality is valid.
         """
-        # Validate that quality_score is a number
-        if not isinstance(quality_score, (int, float)):
+        # Validate that quality_score is a number (including numpy types)
+        try:
+            quality_score = float(quality_score)
+        except (TypeError, ValueError):
             return ValidationResult.failure(
                 "Quality score must be a number",
                 error_code="INVALID_QUALITY_TYPE"
@@ -378,8 +385,10 @@ class AttendanceValidator:
                 error_code="INVALID_QUALITY_RANGE"
             )
         
-        # Validate that threshold is valid
-        if not isinstance(threshold, (int, float)):
+        # Validate that threshold is valid (including numpy types)
+        try:
+            threshold = float(threshold)
+        except (TypeError, ValueError):
             return ValidationResult.failure(
                 "Threshold must be a number",
                 error_code="INVALID_THRESHOLD_TYPE"
