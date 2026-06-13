@@ -379,10 +379,14 @@ export function LivenessVerifier({
    * Start camera and begin blink detection
    */
   useEffect(() => {
-    if (isMediaPipeReady && !isActive) {
-      startCamera();
-    }
-  }, [isMediaPipeReady, isActive, startCamera]);
+    if (!isMediaPipeReady || isActive) return;
+
+    void startCamera();
+
+    return () => {
+      stopCamera();
+    };
+  }, [isMediaPipeReady, isActive, startCamera, stopCamera]);
 
   /**
    * Real-time frame processing loop
@@ -455,7 +459,6 @@ export function LivenessVerifier({
           <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden">
             <video
               ref={videoRef}
-              autoPlay
               playsInline
               muted
               className="w-full h-full object-cover"

@@ -11,8 +11,9 @@ import numpy as np
 
 try:
     import mediapipe as mp
+    _ = mp.solutions.face_mesh
     MEDIAPIPE_AVAILABLE = True
-except ImportError:
+except (ImportError, AttributeError):
     MEDIAPIPE_AVAILABLE = False
     mp = None
 

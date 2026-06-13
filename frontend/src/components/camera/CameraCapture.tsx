@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useCamera } from '@/lib/hooks/useCamera';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -15,12 +15,16 @@ interface CameraCaptureProps {
 
 export const CameraCapture = ({ onCapture, autoStart = false, captureButtonText = 'Capture Photo' }: CameraCaptureProps) => {
   const { videoRef, isActive, error, startCamera, stopCamera, captureFrame } = useCamera();
+  const autoStartedRef = useRef(false);
 
   useEffect(() => {
-    if (autoStart) {
-      startCamera();
-    }
+    if (!autoStart || autoStartedRef.current) return;
+
+    autoStartedRef.current = true;
+    void startCamera();
+
     return () => {
+      autoStartedRef.current = false;
       stopCamera();
     };
   }, [autoStart, startCamera, stopCamera]);
@@ -38,7 +42,6 @@ export const CameraCapture = ({ onCapture, autoStart = false, captureButtonText 
         <div className="relative bg-muted rounded-lg overflow-hidden aspect-video transition-all duration-300">
           <video
             ref={videoRef}
-            autoPlay
             playsInline
             muted
             className="w-full h-full object-cover"

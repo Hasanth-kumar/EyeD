@@ -13,10 +13,11 @@ from .value_objects import FaceLocation
 # Try to import MediaPipe for enhanced detection
 try:
     import mediapipe as mp
-    MEDIAPIPE_AVAILABLE = True
     mp_face_detection = mp.solutions.face_detection
-except ImportError:
+    MEDIAPIPE_AVAILABLE = True
+except (ImportError, AttributeError):
     MEDIAPIPE_AVAILABLE = False
+    mp = None
     mp_face_detection = None
 
 # Try to import OpenCV
